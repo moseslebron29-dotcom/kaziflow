@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { ArrowRight, Check, FileCheck2, MailCheck, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Wordmark } from "../components/Brand";
+import VisitorAd from "../components/VisitorAd";
 import { trpc } from "../lib/trpc";
 import { KENYA_COUNTIES } from "@shared/counties";
 
@@ -351,6 +352,7 @@ export default function AuthPage({ path }: { path: string }) {
 
   return (
     <div className="auth-page">
+      {path === "/register" && <VisitorAd placement="signup" />}
       <section className="auth-panel">
         <div className="auth-brand">
           <Wordmark />

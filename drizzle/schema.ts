@@ -411,7 +411,7 @@ export const announcements = pgTable(
     sponsorName: varchar("sponsorName", { length: 120 }),
     audience: varchar("audience", {
       length: 20,
-      enum: ["all", "members", "activated", "not_activated", "advertisers", "visitors"],
+      enum: ["all", "members", "activated", "not_activated", "advertisers", "visitors", "signup"],
     }).default("members").notNull(),
     status: varchar("status", { length: 12, enum: ["draft", "published", "paused"] }).default("draft").notNull(),
     publishAt: ts("publishAt").defaultNow().notNull(),

@@ -34,6 +34,7 @@ const audiences = [
   ["advertisers", "Advertisers"],
   ["all", "Everyone signed in"],
   ["visitors", "First-time website visitors (not signed in)"],
+  ["signup", "People opening the create-account page (first time)"],
 ] as const;
 
 export function AnnouncementsAdmin() {

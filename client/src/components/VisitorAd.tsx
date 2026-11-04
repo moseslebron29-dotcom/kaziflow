@@ -21,12 +21,13 @@ function remember(id: number) {
 }
 
 /**
- * Popup ad for first-time visitors on public pages (home and task browsing).
+ * Popup ad for first-time visitors: "public" on the home and task-browsing pages,
+ * "signup" on the create-account page.
  * Each browser sees each ad once; never shown to signed-in members or on
  * payment, task-submission or withdrawal screens.
  */
-export default function VisitorAd() {
-  const ad = trpc.announcements.visitorNext.useQuery(undefined, { staleTime: 300_000, retry: false, refetchOnWindowFocus: false });
+export default function VisitorAd({ placement = "public" }: { placement?: "public" | "signup" }) {
+  const ad = trpc.announcements.visitorNext.useQuery({ placement }, { staleTime: 300_000, retry: false, refetchOnWindowFocus: false });
   const event = trpc.announcements.visitorEvent.useMutation();
   const [ready, setReady] = useState(false);
   const [open, setOpen] = useState(false);

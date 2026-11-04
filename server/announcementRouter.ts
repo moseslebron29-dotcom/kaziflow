@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { announcementViews, announcements, uploadedAssets } from "../drizzle/schema";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
@@ -21,7 +21,7 @@ const input = z.object({
   linkUrl: z.string().trim().url().max(2048).nullable().optional().or(z.literal("").transform(() => null)),
   linkLabel: z.string().trim().max(40).nullable().optional(),
   sponsorName: z.string().trim().max(120).nullable().optional(),
-  audience: z.enum(["all", "members", "activated", "not_activated", "advertisers", "visitors"]),
+  audience: z.enum(["all", "members", "activated", "not_activated", "advertisers", "visitors", "signup"]),
   publishAt: z.string().datetime({ offset: true }).optional().nullable(),
   expiresAt: z.string().datetime({ offset: true }).optional().nullable(),
   status: z.enum(["draft", "published", "paused"]),
@@ -108,7 +108,7 @@ export const announcementRouter = router({
       .limit(20);
     const u = ctx.user;
     const matches = live.filter(a => {
-      if (a.audience === "visitors") return false;
+      if (a.audience === "visitors" || a.audience === "signup") return false;
       if (a.audience === "all") return true;
       if (a.audience === "advertisers") return u.accountType === "advertiser";
       if (u.accountType !== "member") return false;
@@ -131,7 +131,7 @@ export const announcementRouter = router({
    * The newest live ad for first-time visitors (people not signed in). The browser
    * remembers which ads it has already shown, so each visitor sees each ad once.
    */
-  visitorNext: publicProcedure.query(async ({ ctx }) => {
+  visitorNext: publicProcedure.input(z.object({ placement: z.enum(["public", "signup"]).default("public") }).optional()).query(async ({ ctx, input: i }) => {
     if (ctx.user) return null;
     const db = await dbRequired();
     const now = new Date();
@@ -142,7 +142,7 @@ export const announcementRouter = router({
         .where(
           and(
             eq(announcements.status, "published"),
-            eq(announcements.audience, "visitors"),
+            eq(announcements.audience, i?.placement === "signup" ? "signup" : "visitors"),
             lte(announcements.publishAt, now),
             or(isNull(announcements.expiresAt), gt(announcements.expiresAt, now))
           )
@@ -165,7 +165,7 @@ export const announcementRouter = router({
       }
       const db = await dbRequired();
       const column = i.kind === "seen" ? { impressions: sql`${announcements.impressions} + 1` } : { clicks: sql`${announcements.clicks} + 1` };
-      await db.update(announcements).set(column).where(and(eq(announcements.id, i.id), eq(announcements.audience, "visitors")));
+      await db.update(announcements).set(column).where(and(eq(announcements.id, i.id), inArray(announcements.audience, ["visitors", "signup"])));
       return { success: true };
     }),
 
