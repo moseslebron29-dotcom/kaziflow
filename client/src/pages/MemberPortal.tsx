@@ -46,6 +46,7 @@ import { trpc } from "../lib/trpc";
 import { formatKes } from "../lib/format";
 import { TASK_CATEGORIES, TASK_GROUPS, categoryLabel } from "@shared/taskCategories";
 import { KENYA_COUNTIES } from "@shared/counties";
+import { mpesaFailureReason } from "@shared/money";
 
 type User = {
   id: number;
@@ -1699,7 +1700,7 @@ function ActivationPage({ isActive, isVerified, user }: { isActive: boolean; isV
                 <>
                   <X size={18} />
                   <span>
-                    <b>Payment not completed</b>No money was taken, or the prompt was cancelled. You can try again.
+                    <b>Payment not completed</b>{mpesaFailureReason(poll.data?.resultCode)}
                   </span>
                 </>
               ) : (

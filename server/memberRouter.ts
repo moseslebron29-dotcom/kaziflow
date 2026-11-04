@@ -117,12 +117,18 @@ export const memberRouter = router({
       const last = previous[0];
       // A prompt that never got a callback is retired after 3 minutes so the member can retry.
       const stalePending = last && last.status === "pending" && last.createdAt < new Date(Date.now() - 3 * 60_000);
+      // Older code parked Safaricom's own "not completed" results (no receipt, non-zero code)
+      // for admin review. No money moved on those, so close them and let the member retry.
+      const providerDeclined =
+        last && last.status === "verification_required" && !last.receipt && last.resultCode !== null && last.resultCode !== "0";
+      if (providerDeclined)
+        await tx.update(paymentAttempts).set({ status: "failed" }).where(eq(paymentAttempts.id, last.id));
       if (stalePending)
         await tx
           .update(paymentAttempts)
           .set({ status: "failed", resultDescription: "No M-Pesa confirmation received within 3 minutes." })
           .where(eq(paymentAttempts.id, last.id));
-      if (last && !stalePending && ["pending", "callback_received", "verification_required"].includes(last.status))
+      if (last && !stalePending && !providerDeclined && ["pending", "callback_received", "verification_required"].includes(last.status))
         throw new TRPCError({
           code: "CONFLICT",
           message:
@@ -160,7 +166,7 @@ export const memberRouter = router({
     const db = await dbRequired();
     const row = (
       await db
-        .select({ id: paymentAttempts.id, status: paymentAttempts.status, receipt: paymentAttempts.receipt, amountMinor: paymentAttempts.amountMinor, createdAt: paymentAttempts.createdAt })
+        .select({ id: paymentAttempts.id, status: paymentAttempts.status, resultCode: paymentAttempts.resultCode, receipt: paymentAttempts.receipt, amountMinor: paymentAttempts.amountMinor, createdAt: paymentAttempts.createdAt })
         .from(paymentAttempts)
         .where(and(eq(paymentAttempts.id, input.paymentId), eq(paymentAttempts.userId, ctx.user.id)))
         .limit(1)

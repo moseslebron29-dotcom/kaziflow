@@ -28,3 +28,26 @@ export function withdrawalCheck(input: { amountMinor: number; availableMinor: nu
   if (input.amountMinor > input.availableMinor) return { ok: false as const, reason: "Available balance is not enough for this withdrawal." };
   return { ok: true as const, payoutMinor: input.amountMinor - input.feeMinor };
 }
+
+/** Plain-language reason for a Safaricom STK result code shown to the member. */
+export function mpesaFailureReason(resultCode: string | number | null | undefined) {
+  switch (String(resultCode ?? "")) {
+    case "1":
+      return "Your M-Pesa balance was not enough. Top up and try again.";
+    case "1032":
+      return "The M-Pesa prompt was cancelled. You can try again.";
+    case "1037":
+      return "Your phone could not be reached. Make sure it is on and has network, then try again.";
+    case "2001":
+      return "The M-Pesa PIN was wrong. Try again with the correct PIN.";
+    case "1019":
+      return "The M-Pesa prompt expired. You can try again.";
+    case "1001":
+      return "Another M-Pesa payment was in progress on your phone. Wait a minute, then try again.";
+    case "1025":
+    case "9999":
+      return "Safaricom could not send the prompt to your phone. Wait a minute, then try again.";
+    default:
+      return "No money was taken, or the prompt was cancelled. You can try again.";
+  }
+}

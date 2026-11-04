@@ -27,12 +27,9 @@ async function requireReview(
       .limit(1)
       .for("update");
     const payment = rows[0];
-    if (
-      !payment ||
-      payment.status === "succeeded" ||
-      payment.status === "failed"
-    )
-      return;
+    // A "failed" attempt is still moved to review here: this path only runs for a
+    // success callback, so money may have moved and must not be silently dropped.
+    if (!payment || payment.status === "succeeded") return;
     await tx
       .update(paymentAttempts)
       .set({
@@ -57,6 +54,39 @@ async function requireReview(
   });
 }
 
+/** Records a definitive unsuccessful result from Safaricom. Never credits anything. */
+async function markFailed(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  paymentId: number,
+  callback: NonNullable<ReturnType<typeof parseStkCallback>>
+) {
+  await db.transaction(async tx => {
+    const rows = await tx
+      .select()
+      .from(paymentAttempts)
+      .where(eq(paymentAttempts.id, paymentId))
+      .limit(1)
+      .for("update");
+    const payment = rows[0];
+    if (!payment || payment.status === "succeeded" || payment.status === "failed") return;
+    await tx
+      .update(paymentAttempts)
+      .set({
+        status: "failed",
+        resultCode: String(callback.resultCode),
+        resultDescription: (callback.resultDescription || "M-Pesa payment was not completed.").slice(0, 500),
+      })
+      .where(eq(paymentAttempts.id, payment.id));
+    await tx.insert(auditEvents).values({
+      actorId: null,
+      action: "daraja_payment_not_completed",
+      targetType: "payment",
+      targetId: payment.id,
+      detailsText: JSON.stringify({ resultCode: callback.resultCode }),
+    });
+  });
+}
+
 export async function processDarajaCallback(body: unknown) {
   const callback = parseStkCallback(body);
   if (!callback) return { accepted: false, reason: "Malformed callback" };
@@ -73,24 +103,20 @@ export async function processDarajaCallback(body: unknown) {
       accepted: true,
       reason: "Unknown checkout reference recorded for investigation",
     };
-  if (payment.status === "succeeded" || payment.status === "failed")
+  if (payment.status === "succeeded")
     return { accepted: true, reason: "Duplicate terminal callback ignored" };
 
-  // A non-zero callback can race a success callback. Keep the attempt recoverable; never
-  // let an unverified callback failure permanently block a later authoritative success.
+  // Safaricom sends one final result per prompt. A non-zero result (cancelled, wrong PIN,
+  // insufficient balance, unreachable phone, push error) means no money moved, so the
+  // attempt is closed as failed and the member can retry straight away. A later verified
+  // success for the same prompt can still settle it below.
   if (callback.resultCode !== 0) {
-    await requireReview(
-      db,
-      payment.id,
-      callback.resultDescription ||
-        "Daraja reported an unsuccessful payment; confirm the final state with the provider.",
-      callback,
-      "daraja_payment_requires_review"
-    );
+    if (payment.status === "failed")
+      return { accepted: true, reason: "Duplicate failure callback ignored" };
+    await markFailed(db, payment.id, callback);
     return {
       accepted: true,
-      reason:
-        "Provider result requires reconciliation; no account credit was made",
+      reason: "Payment not completed; no account credit was made",
     };
   }
 
@@ -102,8 +128,7 @@ export async function processDarajaCallback(body: unknown) {
       .limit(1)
       .for("update");
     const locked = rows[0];
-    if (!locked || locked.status === "succeeded" || locked.status === "failed")
-      return;
+    if (!locked || locked.status === "succeeded") return;
     await tx
       .update(paymentAttempts)
       .set({
@@ -182,8 +207,7 @@ export async function processDarajaCallback(body: unknown) {
       .limit(1)
       .for("update");
     const locked = lockedRows[0];
-    if (!locked || locked.status === "succeeded" || locked.status === "failed")
-      return;
+    if (!locked || locked.status === "succeeded") return;
 
     if (locked.purpose === "activation") {
       const accountRows = await tx
