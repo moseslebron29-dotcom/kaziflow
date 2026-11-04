@@ -1351,11 +1351,29 @@ function AdminTaskEditor({
     autoApproveQuiz: Boolean(initial?.autoApproveQuiz),
     featured: Boolean(initial?.featured),
   });
+  const uploadImage = trpc.admin.uploadTaskImage.useMutation();
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [keepImage, setKeepImage] = useState(Boolean(initial?.imageUrl));
   const [quiz, setQuiz] = useState<QuizDraft[]>(initialQuiz.length ? initialQuiz : [{ question: "", options: ["", ""], answerIndex: 0 }]);
   const put = (k: string, v: string) => setForm(c => ({ ...c, [k]: v }));
   const budgetNeeded = Number(form.rewardKes || 0) * Number(form.slotLimit || 0);
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
+    let imageAssetId: number | null = null;
+    if (imageFile) {
+      if (imageFile.size > 3 * 1024 * 1024) return void toast.error("The picture must be 3 MB or smaller.");
+      try {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+          reader.onerror = () => reject(new Error("Could not read the selected picture."));
+          reader.readAsDataURL(imageFile);
+        });
+        imageAssetId = (await uploadImage.mutateAsync({ mime: imageFile.type as any, base64 })).assetId;
+      } catch (error) {
+        return void toast.error(error instanceof Error ? error.message : "The picture could not be uploaded.");
+      }
+    }
     const payload = {
       ...form,
       category: form.category as any,
@@ -1372,9 +1390,12 @@ function AdminTaskEditor({
       quizJson: form.completionMode === "quiz" ? JSON.stringify(quiz.map(q => ({ ...q, options: q.options.filter(o => o.trim()) }))) : null,
       status: form.status as any,
       ...flags,
+      imageAssetId,
+      keepImage: imageAssetId ? undefined : keepImage,
     };
     if (initial?.id) update?.({ id: initial.id, ...payload });
     else create?.(payload);
+    setImageFile(null);
     if (inline) setOpen(false);
   };
   return (
@@ -1438,6 +1459,37 @@ function AdminTaskEditor({
             </label>
             <Field form={form} put={put} k="externalUrl" label="Task link (https://, optional)" type="url" />
             <Field form={form} put={put} k="sponsorName" label="Sponsor / advertiser name (optional)" />
+            <div className="field full">
+              <span>Task picture (optional)</span>
+              <div className="task-image-field">
+                {imageFile ? (
+                  <img src={URL.createObjectURL(imageFile)} alt="New task picture" />
+                ) : keepImage && initial?.imageUrl ? (
+                  <img src={initial.imageUrl} alt="Current task picture" />
+                ) : null}
+                <input
+                  className="input"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  aria-label="Task picture"
+                  onChange={e => setImageFile(e.target.files?.[0] ?? null)}
+                  style={{ maxWidth: 320 }}
+                />
+                {(imageFile || (keepImage && initial?.imageUrl)) && (
+                  <button
+                    type="button"
+                    className="button-app secondary"
+                    onClick={() => {
+                      setImageFile(null);
+                      setKeepImage(false);
+                    }}
+                  >
+                    Remove picture
+                  </button>
+                )}
+              </div>
+              <small>JPEG, PNG or WebP up to 3 MB. Shown on the task card and inside the task.</small>
+            </div>
             <label className="field">
               <span>Starts (optional)</span>
               <input className="input" type="datetime-local" value={form.startsAt} onChange={e => put("startsAt", e.target.value)} />
@@ -1512,7 +1564,7 @@ function AdminTaskEditor({
             </div>
           )}
           <div className="button-row">
-            <button className="button-app" disabled={createBusy || updateBusy}>
+            <button className="button-app" disabled={createBusy || updateBusy || uploadImage.isPending}>
               {initial?.id ? "Save task changes" : "Create task"} <Check size={14} />
             </button>
           </div>

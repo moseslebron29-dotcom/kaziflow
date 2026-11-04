@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ArrowRight, Clock3, FileCheck2, Users } from "lucide-react";
 import { Wordmark } from "../components/Brand";
+import VisitorAd from "../components/VisitorAd";
 import { trpc } from "../lib/trpc";
 import { formatKes } from "../lib/format";
 import { TASK_CATEGORIES, TASK_GROUPS, categoryLabel } from "@shared/taskCategories";
@@ -13,6 +14,7 @@ export default function PublicTasks() {
   const info = trpc.site.info.useQuery(undefined, { staleTime: 300_000 });
   return (
     <div className="public-page">
+      <VisitorAd />
       <header className="public-header">
         <Wordmark />
         <nav className="public-nav" aria-label="Main navigation">
@@ -72,6 +74,7 @@ export default function PublicTasks() {
           <div className="task-grid">
             {tasks.data.map(task => (
               <article className={`task-card${task.featured ? " task-card-featured" : ""}`} key={task.id}>
+                {task.imageUrl && <img className="task-card-image" src={task.imageUrl} alt="" loading="lazy" />}
                 <div className="task-meta">
                   <span className="badge">{categoryLabel(task.category)}</span>
                   {task.repeatDaily && <span className="badge processing">Daily</span>}

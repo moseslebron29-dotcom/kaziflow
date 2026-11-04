@@ -2,9 +2,9 @@ import { TRPCError } from "@trpc/server";
 import { and, desc, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { announcementViews, announcements, uploadedAssets } from "../drizzle/schema";
-import { adminProcedure, protectedProcedure, router } from "./_core/trpc";
+import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { getDb, isUniqueViolation } from "./db";
-import { audit } from "./security";
+import { audit, limitRequest } from "./security";
 import { uploadImage, uploadVideo } from "./uploads";
 import { publicMediaUrl } from "./storage";
 
@@ -20,7 +20,8 @@ const input = z.object({
   mediaAssetId: z.number().int().positive().nullable().optional(),
   linkUrl: z.string().trim().url().max(2048).nullable().optional().or(z.literal("").transform(() => null)),
   linkLabel: z.string().trim().max(40).nullable().optional(),
-  audience: z.enum(["all", "members", "activated", "not_activated", "advertisers"]),
+  sponsorName: z.string().trim().max(120).nullable().optional(),
+  audience: z.enum(["all", "members", "activated", "not_activated", "advertisers", "visitors"]),
   publishAt: z.string().datetime({ offset: true }).optional().nullable(),
   expiresAt: z.string().datetime({ offset: true }).optional().nullable(),
   status: z.enum(["draft", "published", "paused"]),
@@ -39,7 +40,7 @@ function values(i: z.infer<typeof input>) {
   const publishAt = i.publishAt ? new Date(i.publishAt) : new Date();
   const expiresAt = i.expiresAt ? new Date(i.expiresAt) : null;
   if (expiresAt && expiresAt <= publishAt) throw new TRPCError({ code: "BAD_REQUEST", message: "Expiry must be after the publish date." });
-  return { title: i.title, body: i.body, linkUrl: i.linkUrl || null, linkLabel: i.linkLabel?.trim() || null, audience: i.audience, publishAt, expiresAt, status: i.status };
+  return { title: i.title, body: i.body, linkUrl: i.linkUrl || null, linkLabel: i.linkLabel?.trim() || null, sponsorName: i.sponsorName?.trim() || null, audience: i.audience, publishAt, expiresAt, status: i.status };
 }
 
 export const announcementRouter = router({
@@ -107,6 +108,7 @@ export const announcementRouter = router({
       .limit(20);
     const u = ctx.user;
     const matches = live.filter(a => {
+      if (a.audience === "visitors") return false;
       if (a.audience === "all") return true;
       if (a.audience === "advertisers") return u.accountType === "advertiser";
       if (u.accountType !== "member") return false;
@@ -122,8 +124,50 @@ export const announcementRouter = router({
     const dismissed = new Set(seen.filter(s => s.dismissedAt).map(s => s.announcementId));
     const pick = matches.find(a => !dismissed.has(a.id));
     if (!pick) return null;
-    return { id: pick.id, title: pick.title, body: pick.body, linkUrl: pick.linkUrl, linkLabel: pick.linkLabel, mediaType: pick.mediaType, mediaUrl: publicMediaUrl(pick.mediaKey) };
+    return { id: pick.id, title: pick.title, body: pick.body, linkUrl: pick.linkUrl, linkLabel: pick.linkLabel, sponsorName: pick.sponsorName, mediaType: pick.mediaType, mediaUrl: publicMediaUrl(pick.mediaKey) };
   }),
+
+  /**
+   * The newest live ad for first-time visitors (people not signed in). The browser
+   * remembers which ads it has already shown, so each visitor sees each ad once.
+   */
+  visitorNext: publicProcedure.query(async ({ ctx }) => {
+    if (ctx.user) return null;
+    const db = await dbRequired();
+    const now = new Date();
+    const pick = (
+      await db
+        .select()
+        .from(announcements)
+        .where(
+          and(
+            eq(announcements.status, "published"),
+            eq(announcements.audience, "visitors"),
+            lte(announcements.publishAt, now),
+            or(isNull(announcements.expiresAt), gt(announcements.expiresAt, now))
+          )
+        )
+        .orderBy(desc(announcements.publishAt))
+        .limit(1)
+    )[0];
+    if (!pick) return null;
+    return { id: pick.id, title: pick.title, body: pick.body, linkUrl: pick.linkUrl, linkLabel: pick.linkLabel, sponsorName: pick.sponsorName, mediaType: pick.mediaType, mediaUrl: publicMediaUrl(pick.mediaKey) };
+  }),
+
+  /** Counts a visitor impression or click. Rate-limited per address to limit inflation. */
+  visitorEvent: publicProcedure
+    .input(z.object({ id: z.number().int().positive(), kind: z.enum(["seen", "clicked"]) }))
+    .mutation(async ({ ctx, input: i }) => {
+      try {
+        limitRequest(ctx.req, `visitor-ad-${i.kind}-${i.id}`, 3, 24 * 60 * 60_000);
+      } catch {
+        return { success: true };
+      }
+      const db = await dbRequired();
+      const column = i.kind === "seen" ? { impressions: sql`${announcements.impressions} + 1` } : { clicks: sql`${announcements.clicks} + 1` };
+      await db.update(announcements).set(column).where(and(eq(announcements.id, i.id), eq(announcements.audience, "visitors")));
+      return { success: true };
+    }),
 
   /** Records one impression per member per announcement. */
   seen: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input: i }) => {

@@ -1,6 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { eq } from "drizzle-orm";
+import { storedFiles } from "../drizzle/schema";
+import { getDb } from "./db";
 
 /**
  * File storage for campaign media, announcement media and private evidence.
@@ -8,7 +11,9 @@ import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3
  * - S3-compatible storage (Cloudflare R2, AWS S3, Backblaze B2, ...) when S3_BUCKET
  *   is set. Recommended on Render because the default service disk is wiped on
  *   every deploy.
- * - Local disk at UPLOAD_DIR otherwise (use a Render persistent disk mount path).
+ * - Local disk when UPLOAD_DIR is set (use a Render persistent disk mount path).
+ * - Otherwise the Postgres database (stored_files table), so files survive restarts
+ *   and redeploys on free hosting with no persistent disk.
  *
  * Files are never served directly from storage; the server streams them after
  * checking who may see them.
@@ -45,8 +50,16 @@ function safeKey(key: string) {
   return normalized;
 }
 
-export function storageDriver(): "s3" | "local" {
-  return s3Config() ? "s3" : "local";
+export function storageDriver(): "s3" | "local" | "database" {
+  if (s3Config()) return "s3";
+  if (process.env.UPLOAD_DIR || process.env.STORAGE_DRIVER === "disk") return "local";
+  return "database";
+}
+
+async function dbRequired() {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable for file storage.");
+  return db;
 }
 
 export async function storagePut(key: string, data: Buffer, contentType: string): Promise<{ key: string }> {
@@ -54,6 +67,11 @@ export async function storagePut(key: string, data: Buffer, contentType: string)
   const cfg = s3Config();
   if (cfg) {
     await cfg.client.send(new PutObjectCommand({ Bucket: cfg.bucket, Key: k, Body: data, ContentType: contentType }));
+    return { key: k };
+  }
+  if (storageDriver() === "database") {
+    const db = await dbRequired();
+    await db.insert(storedFiles).values({ storageKey: k, contentType, data }).onConflictDoUpdate({ target: storedFiles.storageKey, set: { contentType, data } });
     return { key: k };
   }
   const file = path.join(uploadRoot(), k);
@@ -70,6 +88,12 @@ export async function storageRead(key: string): Promise<Buffer> {
     const bytes = await result.Body?.transformToByteArray();
     if (!bytes) throw new Error("Stored file is empty.");
     return Buffer.from(bytes);
+  }
+  // Database first (default driver), then local disk for files saved before the switch.
+  const db = await getDb();
+  if (db) {
+    const row = (await db.select({ data: storedFiles.data }).from(storedFiles).where(eq(storedFiles.storageKey, k)).limit(1))[0];
+    if (row) return Buffer.from(row.data);
   }
   return fs.readFile(path.join(uploadRoot(), k));
 }

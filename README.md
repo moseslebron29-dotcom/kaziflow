@@ -2,7 +2,7 @@
 
 KaziFlow is a mobile-first Kenyan earning platform. Members register, verify their email with a six-digit code, activate once with KES 100 through M-Pesa, complete administrator-published tasks, and withdraw approved earnings to M-Pesa. Advertisers fund WhatsApp Status campaigns; administrators review all evidence before any reward is credited.
 
-**Stack:** React 19 + Vite (client) · Express + tRPC (server) · Drizzle ORM + PostgreSQL · Brevo (email) · Safaricom Daraja (STK Push + B2C) · S3-compatible storage or a persistent disk for uploads.
+**Stack:** React 19 + Vite (client) · Express + tRPC (server) · Drizzle ORM + PostgreSQL · Brevo (email) · Safaricom Daraja (STK Push + B2C) · S3-compatible storage, a persistent disk, or (default) the Postgres database for uploads.
 
 ---
 
@@ -94,7 +94,7 @@ npm run build   # client to dist/public, server to dist/index.js + dist/migrate.
 | `DARAJA_B2C_CONSUMER_KEY`, `DARAJA_B2C_CONSUMER_SECRET` | no | Only if B2C uses a separate Daraja app. |
 | `DARAJA_B2C_COMMAND_ID` | no | Default `BusinessPayment`. |
 | `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE` | recommended | S3-compatible storage for uploads (R2/S3/B2). |
-| `UPLOAD_DIR` | if no S3 | Disk path for uploads; on Render use the persistent disk (`/var/data/uploads`). |
+| `UPLOAD_DIR` | optional | Disk path for uploads on a persistent disk (`/var/data/uploads`). Leave unset to keep uploads in the database. |
 | `ADSENSE_CLIENT_ID`, `VITE_ADSENSE_SLOT_HOME`, `VITE_ADSENSE_SLOT_POLICY` | no | Only after Google approves the site. `VITE_*` values are read at build time. |
 
 `BREVO_API_URL_OVERRIDE` and `DARAJA_BASE_URL_OVERRIDE` exist only for local testing against mock servers and are ignored when `NODE_ENV=production`.

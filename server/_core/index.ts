@@ -45,7 +45,7 @@ async function startServer() {
     }
   });
 
-  // Public campaign and announcement media. Evidence is never served here.
+  // Public campaign, announcement and task pictures. Evidence is never served here.
   app.get(/^\/api\/media\/(.+)$/, async (req, res) => {
     try {
       const key = String(req.params[0] ?? "");
@@ -54,19 +54,35 @@ async function startServer() {
       const rows = await db
         .select()
         .from(uploadedAssets)
-        .where(and(eq(uploadedAssets.storageKey, key), inArray(uploadedAssets.purpose, ["campaign", "announcement"])))
+        .where(and(eq(uploadedAssets.storageKey, key), inArray(uploadedAssets.purpose, ["campaign", "announcement", "task"])))
         .limit(1);
       const asset = rows[0];
       if (!asset) return res.status(404).json({ error: "Media not found." });
       const content = await storageRead(asset.storageKey);
+      const headers = {
+        "Content-Type": asset.contentType,
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "public, max-age=86400",
+        "X-Content-Type-Options": "nosniff",
+      };
+      // Byte ranges let phones (especially iPhone Safari) play and seek videos.
+      const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range ?? ""));
+      if (range && (range[1] || range[2])) {
+        const size = content.length;
+        let start = range[1] ? Number(range[1]) : size - Number(range[2]);
+        let end = range[1] && range[2] ? Number(range[2]) : size - 1;
+        start = Math.max(0, start);
+        end = Math.min(end, size - 1);
+        if (start > end || start >= size)
+          return res.status(416).set({ "Content-Range": `bytes */${size}` }).end();
+        return res
+          .status(206)
+          .set({ ...headers, "Content-Range": `bytes ${start}-${end}/${size}`, "Content-Length": String(end - start + 1) })
+          .send(content.subarray(start, end + 1));
+      }
       return res
         .status(200)
-        .set({
-          "Content-Type": asset.contentType,
-          "Content-Length": String(content.length),
-          "Cache-Control": "public, max-age=86400",
-          "X-Content-Type-Options": "nosniff",
-        })
+        .set({ ...headers, "Content-Length": String(content.length) })
         .send(content);
     } catch (error) {
       console.error("[Media] Read failed:", error instanceof Error ? error.message : "unknown error");

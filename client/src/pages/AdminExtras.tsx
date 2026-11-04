@@ -33,6 +33,7 @@ const audiences = [
   ["not_activated", "Members not yet activated"],
   ["advertisers", "Advertisers"],
   ["all", "Everyone signed in"],
+  ["visitors", "First-time website visitors (not signed in)"],
 ] as const;
 
 export function AnnouncementsAdmin() {
@@ -42,7 +43,7 @@ export function AnnouncementsAdmin() {
   const create = trpc.announcements.create.useMutation();
   const setStatus = trpc.announcements.setStatus.useMutation({ onSuccess: () => utils.announcements.adminList.invalidate() });
   const remove = trpc.announcements.delete.useMutation({ onSuccess: () => utils.announcements.adminList.invalidate() });
-  const blank = { title: "", body: "", linkUrl: "", linkLabel: "", audience: "members", publishAt: toLocalInput(new Date()), expiresAt: "", status: "published" };
+  const blank = { title: "", body: "", linkUrl: "", linkLabel: "", sponsorName: "", audience: "members", publishAt: toLocalInput(new Date()), expiresAt: "", status: "published" };
   const [form, setForm] = useState<Record<string, string>>(blank);
   const [file, setFile] = useState<File | null>(null);
   const put = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
@@ -56,6 +57,7 @@ export function AnnouncementsAdmin() {
         body: form.body!,
         linkUrl: form.linkUrl || null,
         linkLabel: form.linkLabel || null,
+        sponsorName: form.sponsorName || null,
         audience: form.audience as any,
         publishAt: fromLocalInput(form.publishAt!),
         expiresAt: fromLocalInput(form.expiresAt!),
@@ -74,7 +76,10 @@ export function AnnouncementsAdmin() {
     <>
       <form className="surface surface-pad form-stack" onSubmit={submit}>
         <h2 className="surface-title">New announcement or push ad</h2>
-        <p className="small-muted">Shown once as a popup on a member's dashboard after they sign in. Never shown on payment, task or withdrawal screens.</p>
+        <p className="small-muted">
+          Members see it once as a popup on their dashboard after signing in. Choose "First-time website visitors" to show it once to people opening the home or
+          tasks page for the first time. Never shown on payment, task or withdrawal screens.
+        </p>
         <div className="field-grid">
           <label className="field">
             <span>Title</span>
@@ -102,6 +107,10 @@ export function AnnouncementsAdmin() {
           <label className="field">
             <span>Destination link (optional, https://)</span>
             <input className="input" type="url" value={form.linkUrl} onChange={e => put("linkUrl", e.target.value)} placeholder="https://" />
+          </label>
+          <label className="field">
+            <span>Sponsor name (optional)</span>
+            <input className="input" maxLength={120} value={form.sponsorName} onChange={e => put("sponsorName", e.target.value)} placeholder="Shown as Sponsored · name" />
           </label>
           <label className="field">
             <span>Button label</span>

@@ -194,3 +194,9 @@
 .activation-steps h2{font-size:14px;margin:0 0 10px}
 .activation-steps ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:9px;font-size:12px;color:var(--muted-foreground);line-height:1.5}
 @media (max-width:760px){.activation-panel{grid-template-columns:1fr;padding:15px}.activation-steps{grid-column:1;grid-row:auto}}
+/* Task pictures */
+.task-card-image{display:block;width:calc(100% + 36px);max-width:none;margin:-18px -18px 2px;aspect-ratio:16/9;object-fit:cover;border-radius:9px 9px 0 0;background:var(--muted)}
+.task-modal-image{display:block;width:100%;max-height:340px;object-fit:contain;margin-top:14px;border-radius:10px;border:1px solid var(--border);background:var(--muted)}
+.task-image-field{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.task-image-field img{width:120px;height:68px;object-fit:cover;border-radius:7px;border:1px solid var(--border)}
+.announce-video{max-height:min(60dvh,420px);object-fit:contain;background:#111d22}

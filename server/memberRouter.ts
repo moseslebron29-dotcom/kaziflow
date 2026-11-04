@@ -65,9 +65,9 @@ const periodFor = (task: { repeatDaily: boolean }) => (task.repeatDaily ? nairob
 
 /** Public task view: never exposes quiz answers or the creator id. */
 function publicTask(task: typeof tasks.$inferSelect) {
-  const { createdById: _c, quizJson, ...rest } = task;
+  const { createdById: _c, quizJson, imageKey, ...rest } = task;
   const quiz = parseQuiz(quizJson).map(q => ({ question: q.question, options: q.options }));
-  return { ...rest, group: categoryGroup(task.category), quiz, slotsLeft: Math.max(0, task.slotLimit - task.slotsTaken) };
+  return { ...rest, imageUrl: publicMediaUrl(imageKey), group: categoryGroup(task.category), quiz, slotsLeft: Math.max(0, task.slotLimit - task.slotsTaken) };
 }
 
 export const memberRouter = router({

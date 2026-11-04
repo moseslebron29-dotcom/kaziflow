@@ -441,7 +441,7 @@ function AnnouncementPopup() {
             <img className="announce-media" src={item.mediaUrl} alt="" />
           ))}
         <div className="announce-body">
-          <p className="page-eyebrow">KaziFlow update</p>
+          <p className="page-eyebrow">{item.sponsorName ? `Sponsored · ${item.sponsorName}` : "KaziFlow update"}</p>
           <h2 id="announce-title">{item.title}</h2>
           <p style={{ whiteSpace: "pre-line" }}>{item.body}</p>
           <div className="button-row">
@@ -638,6 +638,7 @@ function Dashboard({
 
 type TaskRow = {
   id: number;
+  imageUrl?: string | null;
   category: string;
   group: string;
   title: string;
@@ -667,6 +668,7 @@ export function TaskCard({ task, cta, onStart, disabled }: { task: TaskRow; cta:
   const done = task.myStatus === "approved" || task.myStatus === "pending";
   return (
     <article className={`task-card${task.featured ? " task-card-featured" : ""}`}>
+      {task.imageUrl && <img className="task-card-image" src={task.imageUrl} alt="" loading="lazy" />}
       <div className="task-meta">
         <span className="badge">{categoryLabel(task.category)}</span>
         {task.featured && <span className="badge active">Featured</span>}
@@ -843,6 +845,11 @@ function TaskBoard({ isActive, isVerified }: { isActive: boolean; isVerified: bo
                 {remaining > 0 ? `You can submit in ${Math.ceil(remaining / 60)} minute(s).` : "You can submit now."} KaziFlow checks time spent; reviewers check your proof.
               </span>
             </div>
+            {attempt.task.imageUrl && (
+              <a href={attempt.task.imageUrl} target="_blank" rel="noreferrer noopener" title="Open full picture">
+                <img className="task-modal-image" src={attempt.task.imageUrl} alt={`Picture for ${attempt.task.title}`} />
+              </a>
+            )}
             {attempt.task.externalUrl && (
               <a className="button-app secondary" target="_blank" rel="noreferrer noopener" href={attempt.task.externalUrl} style={{ marginTop: 14 }}>
                 Open task link <ArrowUpRight size={14} />

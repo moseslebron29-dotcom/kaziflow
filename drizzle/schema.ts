@@ -1,5 +1,6 @@
 import {
   boolean,
+  customType,
   index,
   integer,
   pgTable,
@@ -19,6 +20,7 @@ import { COMPLETION_MODES, TASK_CATEGORY_IDS } from "../shared/taskCategories";
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 const createdAt = () => ts("createdAt").defaultNow().notNull();
 const updatedAt = () => ts("updatedAt").defaultNow().notNull().$onUpdate(() => new Date());
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
 
 export const users = pgTable(
   "users",
@@ -92,6 +94,8 @@ export const tasks = pgTable(
     requiresEvidence: boolean("requiresEvidence").default(false).notNull(),
     repeatDaily: boolean("repeatDaily").default(false).notNull(),
     quizJson: text("quizJson"),
+    /** Optional picture shown on the task card (uploaded by an administrator). */
+    imageKey: varchar("imageKey", { length: 512 }),
     passMark: integer("passMark").default(70).notNull(),
     autoApproveQuiz: boolean("autoApproveQuiz").default(false).notNull(),
     sponsorName: varchar("sponsorName", { length: 160 }),
@@ -219,7 +223,7 @@ export const uploadedAssets = pgTable(
     sha256: varchar("sha256", { length: 64 }).notNull(),
     contentType: varchar("contentType", { length: 80 }).notNull(),
     sizeBytes: integer("sizeBytes").notNull(),
-    purpose: varchar("purpose", { length: 16, enum: ["campaign", "evidence", "announcement"] }).notNull(),
+    purpose: varchar("purpose", { length: 16, enum: ["campaign", "evidence", "announcement", "task"] }).notNull(),
     createdAt: createdAt(),
   },
   table => [
@@ -403,9 +407,11 @@ export const announcements = pgTable(
     mediaType: varchar("mediaType", { length: 8, enum: ["image", "video"] }),
     linkUrl: varchar("linkUrl", { length: 2048 }),
     linkLabel: varchar("linkLabel", { length: 40 }),
+    /** When set, the popup is labelled "Sponsored · <name>". */
+    sponsorName: varchar("sponsorName", { length: 120 }),
     audience: varchar("audience", {
       length: 20,
-      enum: ["all", "members", "activated", "not_activated", "advertisers"],
+      enum: ["all", "members", "activated", "not_activated", "advertisers", "visitors"],
     }).default("members").notNull(),
     status: varchar("status", { length: 12, enum: ["draft", "published", "paused"] }).default("draft").notNull(),
     publishAt: ts("publishAt").defaultNow().notNull(),
@@ -467,3 +473,14 @@ export const auditEvents = pgTable(
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Task = typeof tasks.$inferSelect;
+
+/**
+ * File bytes kept in Postgres when no S3 bucket or persistent disk is configured,
+ * so uploads survive restarts and redeploys on hosts with ephemeral disks.
+ */
+export const storedFiles = pgTable("stored_files", {
+  storageKey: varchar("storageKey", { length: 512 }).primaryKey(),
+  contentType: varchar("contentType", { length: 80 }).notNull(),
+  data: bytea("data").notNull(),
+  createdAt: createdAt(),
+});

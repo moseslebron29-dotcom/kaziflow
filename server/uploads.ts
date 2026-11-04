@@ -6,7 +6,7 @@ import { storagePut } from "./storage";
 
 const IMAGE_MAX = 3 * 1024 * 1024;
 const VIDEO_MAX = 8 * 1024 * 1024;
-type Purpose = "campaign" | "evidence" | "announcement";
+type Purpose = "campaign" | "evidence" | "announcement" | "task";
 
 const imageTypes: Record<string, { ext: string; matches: (bytes: Buffer) => boolean }> = {
   "image/jpeg": { ext: "jpg", matches: b => b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },

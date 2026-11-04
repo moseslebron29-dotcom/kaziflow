@@ -11,6 +11,7 @@ import {
   supportTickets,
   taskSubmissions,
   tasks,
+  uploadedAssets,
   users,
   wallets,
   whatsappSubmissions,
@@ -26,7 +27,8 @@ import { formatKesMinor, whatsappReward } from "../shared/money";
 import { mailerReady, notify, sendEmail, templates } from "./mailer";
 import { b2cReady } from "./daraja";
 import { startPayout } from "./payouts";
-import { storageDriver } from "./storage";
+import { publicMediaUrl, storageDriver } from "./storage";
+import { uploadImage } from "./uploads";
 
 const dbRequired = async () => {
   const db = await getDb();
@@ -63,7 +65,24 @@ const taskInput = z.object({
   startsAt: optionalDate,
   expiresAt: optionalDate,
   status: z.enum(["draft", "active", "paused", "closed"]).default("draft"),
+  /** New picture uploaded with admin.uploadTaskImage. */
+  imageAssetId: z.number().int().positive().nullable().optional(),
+  /** When editing without a new picture: true keeps the current one, false removes it. */
+  keepImage: z.boolean().optional(),
 });
+
+/** Resolves the picture for a task: a new upload, the existing one, or none. */
+async function taskImage(db: Awaited<ReturnType<typeof dbRequired>>, input: { imageAssetId?: number | null; keepImage?: boolean }, editing: boolean) {
+  if (input.imageAssetId) {
+    const asset = (
+      await db.select().from(uploadedAssets).where(and(eq(uploadedAssets.id, input.imageAssetId), eq(uploadedAssets.purpose, "task"))).limit(1)
+    )[0];
+    if (!asset) throw new TRPCError({ code: "BAD_REQUEST", message: "Upload the task picture again." });
+    return { imageKey: asset.storageKey };
+  }
+  if (editing && input.keepImage !== false) return {};
+  return { imageKey: null };
+}
 
 function taskValues(input: z.infer<typeof taskInput>) {
   if (input.completionMode === "quiz") {
@@ -249,16 +268,29 @@ export const adminRouter = router({
 
   tasks: adminProcedure.query(async () => {
     const db = await dbRequired();
-    return db.select().from(tasks).orderBy(desc(tasks.createdAt)).limit(500);
+    const rows = await db.select().from(tasks).orderBy(desc(tasks.createdAt)).limit(500);
+    return rows.map(t => ({ ...t, imageUrl: publicMediaUrl(t.imageKey) }));
   }),
+
+  uploadTaskImage: adminProcedure
+    .input(z.object({ mime: z.enum(["image/jpeg", "image/png", "image/webp"]), base64: z.string().max(4_200_000) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const asset = await uploadImage({ userId: ctx.user.id, purpose: "task", mime: input.mime, base64: input.base64 });
+        return { assetId: asset.assetId };
+      } catch (error) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "The picture could not be uploaded." });
+      }
+    }),
 
   createTask: adminProcedure.input(taskInput).mutation(async ({ ctx, input }) => {
     if (Math.round(input.rewardKes * 100) * input.slotLimit > input.budgetKes * 100)
       throw new TRPCError({ code: "BAD_REQUEST", message: "The budget must cover the reward for every slot (reward × slots)." });
     const db = await dbRequired();
+    const image = await taskImage(db, input, false);
     const inserted = await db
       .insert(tasks)
-      .values({ ...taskValues(input), slotLimit: input.slotLimit, slotsTaken: 0, spentMinor: 0, createdById: ctx.user.id })
+      .values({ ...taskValues(input), ...image, slotLimit: input.slotLimit, slotsTaken: 0, spentMinor: 0, createdById: ctx.user.id })
       .returning({ id: tasks.id });
     await audit(ctx.user.id, "task_created", "task", inserted[0]!.id, { category: input.category });
     return { id: inserted[0]!.id };
@@ -276,7 +308,8 @@ export const adminRouter = router({
     const committed = found.spentMinor + Number(pending[0]?.total ?? 0);
     if (input.budgetKes * 100 < committed + Math.round(input.rewardKes * 100) * (slotLimit - found.slotsTaken))
       throw new TRPCError({ code: "BAD_REQUEST", message: "Budget must cover paid and pending rewards plus every remaining slot." });
-    await db.update(tasks).set({ ...taskValues(input), slotLimit }).where(eq(tasks.id, input.id));
+    const image = await taskImage(db, input, true);
+    await db.update(tasks).set({ ...taskValues(input), ...image, slotLimit }).where(eq(tasks.id, input.id));
     await audit(ctx.user.id, "task_updated", "task", input.id, { status: input.status });
     return { success: true };
   }),

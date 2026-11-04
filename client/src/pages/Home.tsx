@@ -25,6 +25,7 @@ import {
 import { Wordmark } from "../components/Brand";
 import { trpc } from "../lib/trpc";
 import { AdSlot } from "../components/AdSlot";
+import VisitorAd from "../components/VisitorAd";
 
 const earningGroups = [
   {
@@ -214,6 +215,7 @@ const faqs = [
 export default function Home() {
   return (
     <div className="public-page">
+      <VisitorAd />
       <header className="public-header">
         <Wordmark />
         <nav className="public-nav" aria-label="Main navigation">
