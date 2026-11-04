@@ -3,5 +3,4 @@ dist
 .git
 .env
 .env.*
-.manus-logs
-*.manus-starter-*
+uploads

@@ -15,237 +15,179 @@ import {
   Sparkles,
   Users,
   WalletCards,
+  Share2,
+  Laptop,
+  Gamepad2,
+  MessageSquareQuote,
+  Mail,
+  Phone,
 } from "lucide-react";
 import { Wordmark } from "../components/Brand";
 import { trpc } from "../lib/trpc";
+import { AdSlot } from "../components/AdSlot";
 
-const categories = [
+const earningGroups = [
   {
-    name: "Online surveys",
-    detail: "Follow a clear questionnaire brief.",
-    icon: CircleHelp,
+    id: "social",
+    title: "Social Media Tasks",
+    icon: Share2,
+    detail: "Follow, like, comment and engage on the platforms you already use.",
+    items: ["TikTok", "YouTube", "Instagram", "Facebook", "X / Twitter", "Telegram"],
   },
   {
-    name: "Video tasks",
-    detail: "Watch and complete the stated requirements.",
-    icon: Eye,
+    id: "online",
+    title: "Online Tasks",
+    icon: Laptop,
+    detail: "Practical work you can do from your phone or computer.",
+    items: ["Online surveys", "Website visits", "App testing", "Product reviews", "Data entry", "Typing", "Copywriting", "Translation", "Simple research", "Image categorization", "Content moderation"],
   },
   {
-    name: "Social media",
-    detail: "Only approved, policy-compliant activities.",
-    icon: ArrowUpRight,
+    id: "entertainment",
+    title: "Entertainment & Interactive",
+    icon: Gamepad2,
+    detail: "Learn, play and compete — with rewards set on every task.",
+    items: ["Watch videos", "Educational quizzes", "Trivia challenges", "Games & competitions", "Daily rewards"],
   },
   {
-    name: "Website visits",
-    detail: "Visit a site and follow its task instructions.",
-    icon: ArrowRight,
-  },
-  {
-    name: "Simple microtasks",
-    detail: "Complete small tasks against a checklist.",
-    icon: FileCheck2,
-  },
-  {
-    name: "Content writing",
-    detail: "Submit original writing to an assignment brief.",
+    id: "other",
+    title: "Other Earning Opportunities",
     icon: Sparkles,
-  },
-  {
-    name: "Chat & earn",
-    detail: "Use safe, legitimate opportunities; never share PINs or codes.",
-    icon: MessageCircle,
-  },
-  {
-    name: "Referrals",
-    detail: "Share your unique link; configured eligibility applies.",
-    icon: Users,
-  },
-  {
-    name: "Daily activities",
-    detail: "Configured bonuses only after their stated rules are met.",
-    icon: CalendarCheck,
-  },
-  {
-    name: "Special promotions",
-    detail: "Administrator-published offers with clear limits.",
-    icon: BadgeCheck,
-  },
-  {
-    name: "WhatsApp Status Ads",
-    detail: "Post approved creative and submit evidence for review.",
-    icon: Eye,
+    detail: "More ways to earn, from writing to advertiser campaigns.",
+    items: ["Chat & writing", "Referral tasks", "WhatsApp Status Ads", "Promotional campaigns", "Limited-time tasks", "Sponsored tasks"],
   },
 ];
 
-const sampleReviews = [
-  {
-    name: "Brian Mwangi",
-    county: "Nairobi County",
-    date: "8 Oct 2026 · demo",
-    content:
-      "Mh, napenda vile naona status ya balance yangu. Mwanzoni nilidhani ni scam, lakini maelezo ya review yako clear.",
-  },
-  {
-    name: "Faith Atieno",
-    county: "Kisumu County",
-    date: "10 Oct 2026 · demo",
-    content:
-      "I like that campaign evidence shows a pending status while someone checks it.",
-  },
-  {
-    name: "Kevin Kiptoo",
-    county: "Uasin Gishu County",
-    date: "12 Oct 2026 · demo",
-    content:
-      "It helps to see the reward and remaining task slots before I begin.",
-  },
-  {
-    name: "Mary Wanjiku",
-    county: "Kiambu County",
-    date: "14 Oct 2026 · demo",
-    content:
-      "The pages are arranged clearly, so it is easy to find profile details and task instructions.",
-  },
-  {
-    name: "Dennis Otieno",
-    county: "Siaya County",
-    date: "16 Oct 2026 · demo",
-    content:
-      "Clear instructions show what proof is needed before sending in a task.",
-  },
-  {
-    name: "Sharon Chebet",
-    county: "Nakuru County",
-    date: "18 Oct 2026 · demo",
-    content:
-      "Status ad cards explain the view rate, participant limits and evidence review.",
-  },
-  {
-    name: "Peter Kamau",
-    county: "Nyeri County",
-    date: "20 Oct 2026 · demo",
-    content:
-      "The withdrawal page explains that an M-Pesa request stays under review until a real payout receipt is recorded.",
-  },
-  {
-    name: "Mercy Naliaka",
-    county: "Bungoma County",
-    date: "22 Oct 2026 · demo",
-    content:
-      "Support requests have a clear place in the account rather than a confusing contact form.",
-  },
-  {
-    name: "Samuel Mutua",
-    county: "Machakos County",
-    date: "24 Oct 2026 · demo",
-    content:
-      "Campaign details are available before deciding whether the advertisement suits my status.",
-  },
-  {
-    name: "Diana Akinyi",
-    county: "Mombasa County",
-    date: "26 Oct 2026 · demo",
-    content: "The wallet explains pending and available amounts separately.",
-  },
-];
+function Stars({ rating }: { rating: number }) {
+  return (
+    <span className="review-stars" aria-label={`${rating} out of 5 stars`}>
+      {"★".repeat(rating)}
+      <i>{"★".repeat(5 - rating)}</i>
+    </span>
+  );
+}
 
 function MemberReviews() {
-  const result = trpc.reviews.publicApproved.useQuery(undefined, {
-    retry: false,
-    staleTime: 60_000,
-  });
-  const approved = result.data ?? [];
-  const reviews = [
-    ...approved
-      .slice(0, 10)
-      .map(review => ({
-        name: review.name,
-        county: review.county,
-        date: new Date(review.submittedAt).toLocaleDateString("en-KE", {
-          month: "short",
-          year: "numeric",
-        }),
-        rating: review.rating,
-        content: review.content,
-        sample: false,
-      })),
-    ...sampleReviews
-      .slice(0, Math.max(0, 10 - Math.min(10, approved.length)))
-      .map(review => ({ ...review, rating: 5, sample: true })),
-  ].slice(0, 10);
-  const hasSamples = reviews.some(review => review.sample);
+  const result = trpc.reviews.publicApproved.useQuery(undefined, { retry: false, staleTime: 60_000 });
+  const reviews = result.data ?? [];
+  const average = reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
   return (
-    <section className="section review-section">
+    <section id="reviews" className="section review-section">
       <div className="review-heading">
         <div>
           <p className="eyebrow">
             <span />
-            Member community
+            Member reviews
           </p>
-          <h2>WHAT OUR MEMBERS SAY</h2>
+          <h2>WHAT KENYANS ARE SAYING ABOUT KAZIFLOW</h2>
           <p>
-            {hasSamples
-              ? "Demonstration layout examples only. Genuine member reviews appear here after administrator approval."
-              : "Real experiences and feedback from the KaziFlow community."}
+            {reviews.length
+              ? `Real feedback from KaziFlow members · ${average.toFixed(1)} average from ${reviews.length} approved review${reviews.length === 1 ? "" : "s"}.`
+              : "Real feedback from KaziFlow members will appear here."}
           </p>
         </div>
         <a className="button button-outline" href="/login?next=%2Freviews">
           Write a review <ArrowRight size={15} />
         </a>
       </div>
-      {hasSamples && (
-        <div className="review-disclaimer">
-          <ShieldCheck size={17} />
-          <span>
-            <b>Demonstration content — not genuine customer testimonials.</b>{" "}
-            Sample names, counties, dates and review text are display examples
-            only. They do not represent verified users, real withdrawals, or
-            actual member experiences. Replace each sample with real,
-            administrator-approved member feedback.
-          </span>
+      {reviews.length === 0 ? (
+        <div className="review-invite">
+          <div className="review-invite-icon">
+            <MessageSquareQuote size={26} />
+          </div>
+          <div>
+            <h3>Be among the first to share your experience.</h3>
+            <p>
+              Umejaribu KaziFlow? Tuambie vile imekuwa. Write in English, Kiswahili or Sheng — whatever feels natural. Your review appears here after a quick check by our team, with the name you choose.
+            </p>
+            <div className="review-invite-actions">
+              <a className="button button-primary" href="/login?next=%2Freviews">
+                Share my experience <ArrowRight size={15} />
+              </a>
+              <a className="button button-outline" href="/register">
+                Join KaziFlow
+              </a>
+            </div>
+            <ul className="review-invite-points">
+              <li>
+                <Check size={14} /> Only registered members can review
+              </li>
+              <li>
+                <Check size={14} /> Your email and phone stay private
+              </li>
+              <li>
+                <Check size={14} /> Show your county only if you want to
+              </li>
+            </ul>
+          </div>
+        </div>
+      ) : (
+        <div className="review-grid">
+          {reviews.slice(0, 12).map(review => (
+            <article className="review-card-public" key={review.id}>
+              <div className="review-card-top">
+                <Stars rating={review.rating} />
+                <span className="review-date">{new Date(review.date).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}</span>
+              </div>
+              <blockquote>“{review.content}”</blockquote>
+              <div className="review-person">
+                <span className="review-avatar">{review.displayName.slice(0, 1).toUpperCase()}</span>
+                <span>
+                  <b>{review.displayName}</b>
+                  {review.county && <small>{review.county} County</small>}
+                </span>
+              </div>
+            </article>
+          ))}
         </div>
       )}
-      {result.isError && (
-        <p className="small-muted">
-          Approved member reviews could not be loaded at this time;
-          demonstration cards below remain clearly labeled.
+    </section>
+  );
+}
+
+function SupportSection() {
+  const info = trpc.site.info.useQuery(undefined, { staleTime: 300_000, retry: false });
+  const support = info.data?.support;
+  const wa = support?.whatsapp?.replace(/\D/g, "");
+  return (
+    <section id="support" className="section contact-section">
+      <div>
+        <SectionLabel>Contact & support</SectionLabel>
+        <h2>
+          Need help?
+          <br />
+          <em>Tuko hapa.</em>
+        </h2>
+        <p>
+          Members can open a private support ticket about activation, a task, campaign evidence or a withdrawal. Never share your password, M-Pesa PIN or verification code with anyone.
         </p>
-      )}
-      <div className="review-grid">
-        {reviews.map((review, index) => (
-          <article
-            className="review-card-public"
-            key={review.sample ? `sample-${review.name}` : `approved-${index}`}
-          >
-            <div className="review-card-top">
-              <span
-                className="review-stars"
-                aria-label={`${review.rating} out of 5 stars`}
-              >
-                {"★".repeat(review.rating)}
-                {"☆".repeat(5 - review.rating)}
-              </span>
-            </div>
-            <blockquote>“{review.content}”</blockquote>
-            <div className="review-person">
-              <span className="review-avatar">{review.name.slice(0, 1)}</span>
+        {(support?.email || support?.phone || wa) && (
+          <div className="support-channels">
+            {support?.email && (
+              <a href={`mailto:${support.email}`}>
+                <Mail size={16} /> {support.email}
+              </a>
+            )}
+            {support?.phone && (
+              <a href={`tel:${support.phone.replace(/\s/g, "")}`}>
+                <Phone size={16} /> {support.phone}
+              </a>
+            )}
+            {wa && (
+              <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer noopener">
+                <MessageCircle size={16} /> WhatsApp support
+              </a>
+            )}
+            {support?.hours && (
               <span>
-                <b>{review.name}</b>
-                <small>{review.county}</small>
+                <Clock3 size={16} /> {support.hours}
               </span>
-            </div>
-            <div className="review-date">
-              {review.date}
-              {review.sample ? " · demonstration date" : ""}
-            </div>
-          </article>
-        ))}
+            )}
+          </div>
+        )}
       </div>
-      <p className="small-muted review-footnote">
-        Only member-submitted reviews approved by administrators are presented
-        as real member feedback. No “verified member” badge is shown unless
-        actual verification has been implemented.
-      </p>
+      <a className="button button-primary" href="/login?next=%2Fsupport">
+        Open member support <ArrowRight size={16} />
+      </a>
     </section>
   );
 }
@@ -259,6 +201,16 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+const faqs = [
+  { q: "Is KaziFlow free to join?", a: "Registration is free. To start tasks and WhatsApp Status campaigns, members pay a one-time KES 100 activation fee through an official M-Pesa prompt. Your account activates only after Safaricom confirms the payment." },
+  { q: "How do I verify my email?", a: "After registering we email you a six-digit code. Enter it on the verification screen within 10 minutes. You can request a new code after 60 seconds." },
+  { q: "Is any amount of income guaranteed?", a: "No. Earnings depend on available tasks, slots, advertiser budgets and approval of your work. KaziFlow never promises a fixed income." },
+  { q: "When is task money added to my wallet?", a: "When a reviewer approves your submission. Until then it shows as pending. Some quizzes are checked automatically and credited instantly when you pass." },
+  { q: "How do WhatsApp Status Ads work?", a: "Post the advertiser's image or video on your WhatsApp Status, then upload a screenshot of the post and of the views. A reviewer approves the eligible views and you are paid per approved view, up to the campaign limit." },
+  { q: "How do withdrawals work?", a: "Request a withdrawal to your M-Pesa number from your available balance. It is marked Paid only after Safaricom confirms the payout, and you can see the M-Pesa receipt in your wallet." },
+  { q: "How do referrals work?", a: "Share your referral link. When someone registers with it, verifies their email and activates their account, you receive the referral commission shown in your Referrals page. You cannot refer yourself." },
+];
+
 export default function Home() {
   return (
     <div className="public-page">
@@ -266,9 +218,10 @@ export default function Home() {
         <Wordmark />
         <nav className="public-nav" aria-label="Main navigation">
           <a href="#how-it-works">How it works</a>
-          <a href="#member-work">For members</a>
+          <a href="/tasks">Browse tasks</a>
+          <a href="#member-work">Earning categories</a>
           <a href="#advertisers">For advertisers</a>
-          <a href="#trust">Trust & safety</a>
+          <a href="#reviews">Reviews</a>
         </nav>
         <div className="header-actions">
           <a className="link-muted" href="/login">
@@ -290,16 +243,16 @@ export default function Home() {
               <em>Clear records.</em>
             </h1>
             <p className="hero-lede">
-              Choose a task, follow its requirements, and see what happens next.
-              KaziFlow keeps reviews, earnings and M-Pesa withdrawals in one
-              account.
+              Social media, online, quiz and WhatsApp Status tasks with the reward in
+              KES shown upfront. Submit your work, get reviewed, and withdraw to
+              M-Pesa — all from your phone.
             </p>
             <div className="hero-actions">
               <a className="button button-primary" href="/register">
-                Explore KaziFlow <ArrowRight size={17} />
+                Create free account <ArrowRight size={17} />
               </a>
-              <a className="button button-outline" href="#how-it-works">
-                See how it works <ArrowDown size={16} />
+              <a className="button button-outline" href="/tasks">
+                Browse tasks <ArrowDown size={16} />
               </a>
             </div>
             <p className="hero-note">
@@ -384,10 +337,10 @@ export default function Home() {
             <article className="step-row">
               <span className="step-index">01</span>
               <div>
-                <h3>Create your account</h3>
+                <h3>Register & verify</h3>
                 <p>
-                  Use your email and phone number. Members activate once before
-                  starting earning tasks.
+                  Sign up with your email, phone and county, confirm the six-digit
+                  code we email you, then activate once with KES 100 via M-Pesa.
                 </p>
               </div>
               <span className="step-rule" />
@@ -421,27 +374,31 @@ export default function Home() {
           <div className="section-heading section-heading-wide">
             <SectionLabel>For members</SectionLabel>
             <h2>
-              Choose work that
+              Many ways
               <br />
-              <em>fits the brief.</em>
+              <em>to earn.</em>
             </h2>
             <p>
-              Browse active tasks across practical categories. Each listing
-              explains the work and what counts as a complete submission.
+              Every task shows its category, reward in KES, estimated time, available
+              slots, instructions and exactly what to submit.
             </p>
           </div>
-          <div className="category-grid">
-            {categories.map(({ name, detail, icon: Icon }, index) => (
-              <article
-                className={`category-card category-card-${index + 1}`}
-                key={name}
-              >
+          <div className="earning-group-grid">
+            {earningGroups.map(({ id, title, detail, items, icon: Icon }) => (
+              <article className="earning-group" key={id}>
                 <div className="category-icon">
                   <Icon size={19} />
                 </div>
-                <h3>{name}</h3>
+                <h3>{title}</h3>
                 <p>{detail}</p>
-                <span className="category-line" />
+                <ul>
+                  {items.map(item => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+                <a className="text-link" href="/tasks">
+                  See available tasks <ArrowRight size={14} />
+                </a>
               </article>
             ))}
           </div>
@@ -453,8 +410,8 @@ export default function Home() {
                 advertisers.
               </span>
             </div>
-            <a className="button button-dark" href="/register">
-              Browse as a member <ArrowRight size={16} />
+            <a className="button button-dark" href="/tasks">
+              Browse available tasks <ArrowRight size={16} />
             </a>
           </div>
         </section>
@@ -610,8 +567,8 @@ export default function Home() {
               <span>
                 <b>Auditable wallet records</b>
                 <small>
-                  Requests reserve funds; Paid remains locked until a payout
-                  provider can verify disbursement.
+                  Withdrawals reserve funds and are marked Paid only after
+                  Safaricom confirms the M-Pesa payout.
                 </small>
               </span>
             </div>
@@ -627,8 +584,8 @@ export default function Home() {
               <em>withdrawals work.</em>
             </h2>
             <p>
-              Withdrawals begin with a request, not an instant payout. Your
-              balance is reserved while the administrator handles the payment.
+              Request any amount above the minimum from your available balance.
+              The amount is reserved immediately and sent to your M-Pesa.
             </p>
           </div>
           <div className="withdrawal-steps">
@@ -637,29 +594,29 @@ export default function Home() {
               <div>
                 <b>Request</b>
                 <p>
-                  Choose an amount and your saved M-Pesa number. Eligibility and
-                  configured limits are checked.
+                  Enter an amount and your M-Pesa number. Minimums and any fee are
+                  shown before you confirm.
                 </p>
               </div>
             </article>
             <article>
               <span>02</span>
               <div>
-                <b>Review</b>
+                <b>Review & send</b>
                 <p>
-                  Funds are reserved and the request moves through Pending or
-                  Processing status.
+                  Our team reviews the request, then sends it to M-Pesa. The status
+                  moves from Pending to Processing.
                 </p>
               </div>
             </article>
             <article>
               <span>03</span>
               <div>
-                <b>Confirm</b>
+                <b>Paid, with receipt</b>
                 <p>
-                  KaziFlow currently supports Pending and Processing. Paid stays
-                  disabled until a payout provider can verify disbursement;
-                  rejected requests release the reserve.
+                  When Safaricom confirms the payout, the status changes to Paid
+                  with the M-Pesa receipt. Rejected requests return the amount to
+                  your balance.
                 </p>
               </div>
             </article>
@@ -681,68 +638,21 @@ export default function Home() {
             </h2>
           </div>
           <div className="faq-list">
-            <details>
-              <summary>
-                Is any amount of income guaranteed?<span>+</span>
-              </summary>
-              <p>
-                No. Task availability, eligibility, review and advertiser
-                budgets vary. KaziFlow does not promise a level of earnings.
-              </p>
-            </details>
-            <details>
-              <summary>
-                When is task money added to my wallet?<span>+</span>
-              </summary>
-              <p>
-                After a task submission is reviewed and approved. WhatsApp
-                Status Ad evidence also requires review before its eligible
-                reward can be credited.
-              </p>
-            </details>
-            <details>
-              <summary>
-                How is a withdrawal handled?<span>+</span>
-              </summary>
-              <p>
-                Submit a request to your saved M-Pesa number. The amount is
-                reserved during administrator review. The current release
-                supports Pending or Processing only; Paid is disabled until
-                verified disbursement integration is configured.
-              </p>
-            </details>
-            <details>
-              <summary>
-                Are WhatsApp screenshot views independently verified?
-                <span>+</span>
-              </summary>
-              <p>
-                No. They are member-submitted evidence reviewed by an
-                administrator and are not independent verification of each
-                viewer.
-              </p>
-            </details>
+            {faqs.map(f => (
+              <details key={f.q}>
+                <summary>
+                  {f.q}
+                  <span>+</span>
+                </summary>
+                <p>{f.a}</p>
+              </details>
+            ))}
           </div>
         </section>
 
-        <section className="section contact-section">
-          <div>
-            <SectionLabel>Contact & support</SectionLabel>
-            <h2>
-              Need help with
-              <br />
-              <em>a real account issue?</em>
-            </h2>
-            <p>
-              Registered members can send a private ticket about activation, a
-              task, campaign evidence or a withdrawal. Never share a password,
-              M-Pesa PIN or one-time code.
-            </p>
-          </div>
-          <a className="button button-primary" href="/login?next=%2Fsupport">
-            Open member support <ArrowRight size={16} />
-          </a>
-        </section>
+        <AdSlot slot="home-faq" />
+
+        <SupportSection />
 
         <section className="closing-cta">
           <div>

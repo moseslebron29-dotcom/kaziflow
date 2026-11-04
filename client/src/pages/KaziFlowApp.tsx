@@ -9,6 +9,8 @@ import AuthPage from "./AuthPage";
 import MemberPortal from "./MemberPortal";
 import AdvertiserPortal from "./AdvertiserPortal";
 import AdminPortal from "./AdminPortal";
+import PublicTasks from "./PublicTasks";
+import { AdSlot } from "../components/AdSlot";
 
 const authPaths = [
   "/register",
@@ -50,7 +52,7 @@ const policyCopy: Record<
       },
       {
         heading: "Withdrawals and changes",
-        text: "Withdrawal requests are subject to balance, minimums, disclosed charges, processing limits, account review and M-Pesa availability. The current release supports Pending, Processing or Rejected records; Paid is unavailable until a provider can verify actual disbursement. We may update these terms prospectively and retain records needed to investigate transactions.",
+        text: "Withdrawal requests are subject to balance, minimums, disclosed charges, processing limits, account review and M-Pesa availability. A withdrawal is marked Paid only after Safaricom confirms the M-Pesa payout. We may update these terms prospectively and retain records needed to investigate transactions.",
       },
     ],
   },
@@ -69,7 +71,7 @@ const policyCopy: Record<
       },
       {
         heading: "Service providers",
-        text: "Safaricom Daraja processes payment prompts and transaction verification when credentials are configured. Object storage hosts approved campaign media and user-uploaded evidence. Email delivery is disabled until its server-side provider is configured.",
+        text: "Safaricom Daraja processes payment prompts and transaction verification when credentials are configured. Object storage hosts approved campaign media and user-uploaded evidence. Brevo sends account emails such as verification codes, password resets and status updates.",
       },
       {
         heading: "Access and safety",
@@ -149,7 +151,7 @@ const policyCopy: Record<
   "/withdrawal-policy": {
     title: "Withdrawal Policy",
     intro:
-      "Withdrawal requests reserve available funds for review; a request is not an M-Pesa payout confirmation. This release does not provide an automated disbursement integration.",
+      "Withdrawal requests reserve available funds immediately. A withdrawal is marked Paid only when Safaricom confirms the M-Pesa payout to your number.",
     sections: [
       {
         heading: "Eligibility and limits",
@@ -157,11 +159,11 @@ const policyCopy: Record<
       },
       {
         heading: "Status lifecycle",
-        text: "Pending means received and reserved; Processing means under review; Rejected means the reserve was released back to available balance. Paid status is reserved for provider-confirmed disbursement and cannot be assigned in this release.",
+        text: "Pending means received and reserved. Processing means the payout was sent to M-Pesa and we are waiting for Safaricom's result. Paid means Safaricom confirmed it, with the M-Pesa receipt shown. Payout failed means M-Pesa did not complete it and your funds remain safe. Rejected means the reserve was returned to your available balance.",
       },
       {
         heading: "Review",
-        text: "Provide accurate M-Pesa details and contact support with your request ID if it remains unresolved. KaziFlow will not claim an automated payout until an actual payout integration and confirmation exist.",
+        text: "Provide an M-Pesa number registered in your own name. Changing the payout number requires your account password. Contact support with your withdrawal ID if a request remains unresolved.",
       },
     ],
   },
@@ -208,6 +210,7 @@ function PublicPolicy({ path }: { path: string }) {
         <a className="button button-outline" href="/">
           <ArrowLeft size={15} /> Return to KaziFlow
         </a>
+        <AdSlot slot="policy" />
       </main>
       <footer className="policy-footer">
         <Wordmark inverse />
@@ -238,7 +241,7 @@ export default function KaziFlowApp() {
   const policy = policyCopy[path];
   const publicRoute = authOnly || Boolean(policy) || path === "/404";
   const me = trpc.auth.me.useQuery(undefined, {
-    enabled: !publicRoute,
+    enabled: !publicRoute || path === "/tasks",
     retry: false,
     staleTime: 5_000,
   });
@@ -251,7 +254,7 @@ export default function KaziFlowApp() {
   });
 
   useEffect(() => {
-    if (publicRoute || me.isLoading || me.data !== null) return;
+    if (publicRoute || path === "/tasks" || me.isLoading || me.data !== null) return;
     toast.info("Sign in to continue.");
     setLocation(`/login?next=${encodeURIComponent(location)}`);
   }, [location, me.data, me.isLoading, publicRoute, setLocation]);
@@ -259,6 +262,8 @@ export default function KaziFlowApp() {
   if (path === "/404") return <MissingPage />;
   if (policy) return <PublicPolicy path={path} />;
   if (authOnly) return <AuthPage path={path} />;
+  // Visitors may browse tasks; starting one requires an account.
+  if (path === "/tasks" && me.data === null) return <PublicTasks />;
   if (me.isLoading || me.data === undefined || !me.data)
     return (
       <div className="loading-page">
@@ -279,6 +284,9 @@ export default function KaziFlowApp() {
               not have administrator permissions.
             </span>
           </div>
+          <a className="button-app secondary" href="/dashboard" style={{ marginTop: 14, display: "inline-flex" }}>
+            Back to my dashboard
+          </a>
         </div>
       );
     }

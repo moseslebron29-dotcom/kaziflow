@@ -1,53 +1,122 @@
 # KaziFlow API reference
 
-The browser application uses the same-origin tRPC endpoint at `/api/trpc`. Procedure input schemas are validated in the corresponding server router with Zod. Cookie-authenticated procedures resolve the signed application session against the current account/role and reject suspended users. Role checks, ownership checks and financial state transitions are enforced in the server, not by UI visibility.
+The browser talks to the same-origin tRPC endpoint `/api/trpc`. Every input is validated with Zod in the router. Roles and ownership are enforced on the server.
 
-## Procedure namespaces
-
-### `auth.*`
-
-- `status` — public readiness flags; does not expose secret values.
-- `me`, `register`, `login`, `adminLogin`, `logout` — current account, member/advertiser creation and session actions.
-- `forgotPassword`, `resetPassword`, `verifyEmail`, `resendVerification` — one-time email workflows. They are not operational until the email provider is configured.
-- `updateProfile` — update supported account profile details.
-- `bootstrapAdmin`, `adminSetupStatus` — one-time, configured-email-bound primary administrator setup. Bootstrap requires the configured token, new password and unused one-time setup state.
-
-### `member.*`
-
-- `activationStatus`, `startActivation` — activation fee and M-Pesa STK Push state.
-- `tasks`, `startTask`, `submitTask`, `mySubmissions`, `uploadEvidence` — funded task discovery, server-recorded attempts, evidence and moderation status.
-- `whatsappCampaigns`, `submitWhatsappAd` — eligible ad campaigns and screenshot-backed submissions.
-- `wallet`, `withdraw`, `withdrawals`, `history` — balances, reserved withdrawals and transaction history.
-- `referrals` — referral attribution and status.
-- `supportTickets`, `createSupportTicket` — member-owned support tickets.
-
-### `advertiser.*`
-
-- `overview` — owned campaigns and reporting.
-- `uploadMedia`, `uploadVideo` — validated campaign-media uploads, returning internal asset IDs.
-- `createCampaign`, `fundCampaign` — campaign configuration and provider-gated M-Pesa funding.
-- `participants` — participating-member and administrator-reviewed screenshot-reported view data.
+## tRPC procedures
 
 ### `admin.*`
 
-- `overview`, `users`, `userHistory`, `setSuspended` — user/account review and scoped financial history.
-- `administrators`, `setAdministratorAccess` — delegated admin access; super-admin only.
-- `tasks`, `createTask`, `updateTask`, `deleteTask`, `taskSubmissions`, `reviewTaskSubmission` — funded work and moderation.
-- `whatsappSubmissions`, `reviewWhatsappSubmission`, `campaigns`, `reviewCampaign` — evidence review, spend limits and campaign administration.
-- `payments`, `investigatePayment` — payment attempts and investigation notes.
-- `withdrawals`, `processWithdrawal` — withdrawal review. Current provider boundary prevents a manual transition to Paid.
-- `settings`, `updateSettings`, `supportTickets`, `respondSupportTicket`, `auditEvents` — policy limits, support and auditable changes.
+- `overview` — admin
+- `users` — admin
+- `userHistory` — admin
+- `setSuspended` — admin
+- `administrators` — superAdmin
+- `setAdministratorAccess` — superAdmin
+- `tasks` — admin
+- `createTask` — admin
+- `updateTask` — admin
+- `setTaskStatus` — admin
+- `deleteTask` — admin
+- `taskSubmissions` — admin
+- `reviewTaskSubmission` — admin
+- `whatsappSubmissions` — admin
+- `reviewWhatsappSubmission` — admin
+- `campaigns` — admin
+- `reviewCampaign` — admin
+- `payments` — admin
+- `investigatePayment` — admin
+- `withdrawals` — admin
+- `payWithdrawal` — admin
+- `markPayoutFailed` — admin
+- `rejectWithdrawal` — admin
+- `settings` — admin
+- `updateSettings` — admin
+- `supportTickets` — admin
+- `respondSupportTicket` — admin
+- `emailLog` — admin
+- `broadcastEmail` — admin
+- `auditEvents` — admin
+- `advertisers` — admin
 
-### `reviews.*`
+### `advertiser.*`
 
-- `publicApproved`, `mine`, `submit` — approved public reviews and member-submitted rating/content.
-- `adminList`, `moderate`, `delete` — searchable/rating-filtered moderation, rejection notes and removal.
+- `overview` — advertiser
+- `uploadMedia` — advertiser
+- `uploadVideo` — advertiser
+- `createCampaign` — advertiser
+- `fundCampaign` — advertiser
+- `participants` — advertiser
+- `transactions` — advertiser
 
-## REST endpoints
+### `announcement.*`
 
-- `GET /api/health` — unauthenticated service readiness response.
-- `GET /api/evidence?id=<assetId>` — private uploaded evidence; requires a valid owner/admin session and asset ownership/role checks.
-- `POST /api/daraja/callback` — Safaricom STK Push callback receiver. The handler validates known checkout attempts, matches callback fields, queries Daraja from the server and applies a credit/activation only after provider confirmation. A malformed, unknown, mismatched or inconclusive result is not a payment credit.
-- `GET /api/platform/config.js` — platform-owned, allowlisted public runtime settings only.
+- `adminList` — admin
+- `uploadMedia` — admin
+- `create` — admin
+- `update` — admin
+- `setStatus` — admin
+- `delete` — admin
+- `next` — protected
+- `seen` — protected
+- `clicked` — protected
+- `dismiss` — protected
 
-No client-side API should receive Daraja consumer credentials, passkeys, bootstrap tokens, raw private object-storage keys or password hashes. See `server/` for the authoritative procedure schemas and state transitions.
+### `auth.*`
+
+- `status` — public
+- `me` — public
+- `register` — public
+- `login` — public
+- `adminLogin` — public
+- `logout` — public
+- `sendVerificationCode` — protected
+- `verifyEmailCode` — protected
+- `forgotPassword` — public
+- `resetPassword` — public
+- `changePassword` — protected
+- `updateProfile` — protected
+- `bootstrapAdmin` — public
+- `adminSetupStatus` — public
+
+### `member.*`
+
+- `activationStatus` — protected
+- `startActivation` — protected
+- `paymentStatus` — protected
+- `categories` — public
+- `tasks` — public
+- `startTask` — protected
+- `submitTask` — protected
+- `mySubmissions` — protected
+- `uploadEvidence` — protected
+- `whatsappCampaigns` — protected
+- `submitWhatsappAd` — protected
+- `wallet` — protected
+- `withdrawalSettings` — protected
+- `withdraw` — protected
+- `withdrawals` — protected
+- `history` — protected
+- `referrals` — protected
+- `supportTickets` — protected
+- `createSupportTicket` — protected
+
+### `public.*`
+
+- `info` — public
+
+### `review.*`
+
+- `publicApproved` — public
+- `mine` — protected
+- `submit` — protected
+- `adminList` — admin
+- `moderate` — admin
+- `delete` — admin
+
+## HTTP endpoints
+
+- `GET /api/health` — health check.
+- `POST /api/daraja/callback?token=…` — STK Push result. Payment is accepted only after amount/phone/receipt match and a server-side STK Query confirms it.
+- `POST /api/daraja/b2c/result?token=…`, `POST /api/daraja/b2c/timeout?token=…` — B2C payout results. A withdrawal becomes Paid only when amount, phone and receipt match.
+- `GET /api/media/<key>` — public campaign/announcement media.
+- `GET /api/evidence?id=…` — task/WhatsApp evidence; owner or administrator only.

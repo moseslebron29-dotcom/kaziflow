@@ -46,3 +46,151 @@
 .history-overlay .notice{margin:18px 0}
 .filter-row>.field{min-width:150px;margin:0}.filter-row>.field .select{min-height:42px}
 @media(max-width:680px){.history-overlay{align-items:end;padding:0}.history-dialog{width:100%;max-height:94dvh;padding:18px 14px;border-radius:18px 18px 0 0}.history-dialog-head{top:-18px}.history-dialog-head h2{font-size:19px}.history-dialog .data-table{min-width:600px}.history-sections{gap:14px}}
+
+/* ===== KaziFlow upgrade: task catalogue, OTP, wallet, reviews, announcements ===== */
+.filter-row-sub{margin-top:-4px}
+.filter-chip{padding:5px 9px;border:1px dashed var(--border);border-radius:6px;color:var(--muted-foreground);font-size:10px;background:transparent;cursor:pointer}
+.filter-chip:hover{border-color:var(--primary);color:var(--foreground)}
+.filter-chip.active{border-style:solid;border-color:var(--primary);color:var(--primary);background:var(--accent)}
+.task-card-featured{border-color:#e4b9a9;box-shadow:0 0 0 3px #f5e6df}
+.dark .task-card-featured{border-color:#6b4436;box-shadow:0 0 0 3px #392d29}
+.app-nav-logout{display:flex;align-items:center;gap:11px;width:100%;padding:10px 11px;border:0;border-radius:7px;text-align:left;background:transparent;color:var(--muted-foreground);font:600 12px 'DM Sans',sans-serif;cursor:pointer;margin-top:6px;border-top:1px dashed var(--border)}
+.app-nav-logout:hover{color:var(--destructive);background:var(--muted)}
+.app-nav-logout svg{width:17px;height:17px}
+.app-nav{overflow-y:auto;min-height:0}
+.notice-warn{border-color:#ebd9b7;background:#fff6e6;color:#6b5330}
+.notice-warn svg{color:#bd8240}
+.dark .notice-warn{background:#352f25;border-color:#5a4930;color:#e2d2b2}
+.notice-success{border-color:#cfdcc4;background:#eef3e9;color:#465a36}
+.notice-success svg{color:#6c8a52}
+.dark .notice-success{background:#283126;border-color:#3d4b36;color:#c3d3a9}
+.notice-link{color:var(--primary);font-weight:700;text-decoration:underline;text-underline-offset:2px}
+.notice + .notice,.notice + .dashboard-grid,.notice + .filter-row,.notice + .split-grid,.notice + .activation-panel{margin-top:14px}
+.badge.payout_failed,.badge.being_checked,.badge.unverified,.badge.not_activated{background:#f4e5d8;color:#94633c}
+.badge.suspended,.badge.removed{background:#f4dfdb;color:#994a3f}
+.badge.configured,.badge.ready,.badge.sent,.badge.published,.badge.s3_storage,.badge.activated{background:#e4eadf;color:#546643}
+.badge.not_configured,.badge.setup_required,.badge.local_disk,.badge.skipped,.badge.draft{background:var(--muted);color:var(--muted-foreground)}
+/* Quiz */
+.quiz-list{display:flex;flex-direction:column;gap:12px}
+.quiz-question{border:1px solid var(--border);border-radius:9px;padding:13px 14px;margin:0}
+.quiz-question legend{font-weight:700;font-size:12px;padding:0 4px}
+.quiz-option{display:flex;align-items:center;gap:9px;padding:9px 10px;border:1px solid var(--border);border-radius:7px;margin-top:7px;font-size:12px;cursor:pointer}
+.quiz-option.selected{border-color:var(--primary);background:var(--accent)}
+.quiz-builder{margin-top:14px;padding:14px;border:1px dashed var(--border);border-radius:9px;display:flex;flex-direction:column;gap:10px}
+.quiz-builder-q{display:flex;flex-direction:column;gap:7px;padding:11px;background:var(--muted);border-radius:8px}
+.quiz-builder-option{display:flex;align-items:center;gap:8px}
+.field-inline{display:inline-flex;align-items:center;gap:7px;font-size:11px;color:var(--muted-foreground)}
+.input-small{width:76px;min-height:32px}
+.check-grid{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:12px}
+/* OTP & auth */
+.otp-input{font:700 26px 'DM Mono',monospace;letter-spacing:.55em;text-align:center;min-height:56px}
+.link-button{background:none;border:0;padding:0;color:var(--primary);font:inherit;font-weight:700;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.link-button:disabled{color:var(--muted-foreground);cursor:default;text-decoration:none}
+/* Wallet / earnings */
+.balance-callout{display:flex;justify-content:space-between;align-items:baseline;padding:13px 14px;border-radius:8px;background:var(--accent)}
+.balance-callout span{font-size:11px;color:var(--accent-foreground)}
+.balance-callout strong{font:800 22px Manrope;color:var(--primary);letter-spacing:-.03em}
+.money-in{color:#5b7646}
+.money-out{color:#a54b39}
+.dark .money-in{color:#b5cf96}.dark .money-out{color:#f0a38d}
+.earning-bars{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 22px}
+.earning-bar{display:flex;flex-direction:column;gap:6px;font-size:12px}
+.bar-track{height:8px;border-radius:9px;background:var(--muted);overflow:hidden}
+.bar-track span{display:block;height:100%;background:var(--primary);border-radius:9px;transition:width .4s}
+.payment-state{display:flex;gap:11px;align-items:flex-start;padding:13px 14px;border-radius:9px;border:1px solid var(--border);font-size:12px;line-height:1.5;margin-bottom:14px}
+.payment-state b{display:block}
+.payment-succeeded{background:#eef3e9;border-color:#cfdcc4;color:#465a36}
+.payment-failed{background:#fbefec;border-color:#efcfc7;color:#8e3f33}
+.payment-pending,.payment-callback_received,.payment-verification_required{background:#fff6e6;border-color:#ebd9b7;color:#6b5330}
+.spin{animation:kf-spin 1s linear infinite}
+@keyframes kf-spin{to{transform:rotate(360deg)}}
+/* Reviews */
+.review-stars i{font-style:normal;color:#dccfbd}
+.dark .review-stars i{color:#4a5458}
+.review-card-top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.review-card-top .review-date{font-size:9px;color:#8a949a}
+.review-person{margin-top:auto}
+.review-section h2{text-wrap:balance}
+.review-invite{display:grid;grid-template-columns:auto 1fr;gap:22px;padding:28px;background:#fff;border:1px solid #e2dbd1;border-radius:12px;position:relative;overflow:hidden}
+.review-invite::after{content:"“";position:absolute;right:24px;top:-26px;font:800 180px Manrope;color:#f5e6df;line-height:1;pointer-events:none}
+.review-invite-icon{width:54px;height:54px;border-radius:14px;display:grid;place-items:center;background:#f5e6df;color:#c6533b}
+.review-invite h3{margin:2px 0 8px;font-size:20px;letter-spacing:-.03em;position:relative;z-index:1}
+.review-invite p{margin:0;color:#58666d;font-size:13px;line-height:1.65;max-width:640px;position:relative;z-index:1}
+.review-invite-actions{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0 14px;position:relative;z-index:1}
+.review-invite-points{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:8px 18px;font-size:11px;color:#58666d}
+.review-invite-points li{display:flex;align-items:center;gap:6px}
+.review-invite-points svg{color:#798266}
+.dark .review-invite{background:#20282b;border-color:#344044}
+.dark .review-invite::after{color:#2b3437}
+.dark .review-invite p,.dark .review-invite-points{color:#aeb8b8}
+.star-picker{display:flex;gap:4px}
+.star-picker button{border:0;background:none;font-size:28px;line-height:1;color:#dccfbd;cursor:pointer;padding:0 2px}
+.star-picker button.on{color:#c08a43}
+.review-preview-wrap .review-card-public{min-height:0}
+/* Homepage earning groups */
+.earning-group-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:36px 0 29px}
+.earning-group{display:flex;flex-direction:column;gap:9px;padding:22px;background:#fbf9f5;border:1px solid #ded8ce;border-radius:10px}
+.earning-group h3{margin:6px 0 0;font-size:17px;letter-spacing:-.03em}
+.earning-group p{margin:0;font-size:12px;color:#58666d;line-height:1.55}
+.earning-group ul{list-style:none;padding:0;margin:4px 0 6px;display:flex;flex-wrap:wrap;gap:6px}
+.earning-group li{font-size:10px;padding:4px 8px;border-radius:20px;background:#f1ece4;color:#43525a;font-weight:600}
+.earning-group .text-link{margin-top:auto}
+.support-channels{display:flex;flex-wrap:wrap;gap:10px 18px;margin-top:16px}
+.support-channels a,.support-channels span{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:#1d2b32;text-decoration:none;font-weight:600}
+.support-channels svg{color:#c6533b}
+.ad-slot{max-width:1280px;margin:0 auto;padding:0 40px 30px}
+.ad-slot-label{display:block;font:500 9px 'DM Mono';text-transform:uppercase;letter-spacing:.1em;color:#8a949a;margin-bottom:6px}
+.public-tasks{max-width:1280px;margin:auto;padding:60px 40px 90px}
+.public-tasks h1{font-size:clamp(32px,5vw,56px);letter-spacing:-.06em;line-height:1.02;margin:0}
+.public-tasks h1 em{font-style:normal;color:#c6533b}
+.public-tasks .task-grid{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:10px}
+/* Announcement popup */
+.announce-backdrop{z-index:80}
+.announce-card{position:relative;width:min(460px,100%);max-height:92dvh;overflow:auto;background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:0 30px 90px #111d2240;animation:kf-pop .25s ease-out}
+.announce-media{display:block;width:100%;max-height:300px;object-fit:cover;background:var(--muted)}
+.announce-body{padding:20px 22px 22px}
+.announce-body h2{margin:0 0 8px;font-size:21px;letter-spacing:-.04em}
+.announce-body p{font-size:13px;color:var(--muted-foreground);line-height:1.6;margin:0 0 16px}
+.announce-close{position:absolute;top:10px;right:10px;z-index:2}
+@keyframes kf-pop{from{transform:translateY(12px) scale(.98);opacity:0}to{transform:none;opacity:1}}
+@media (max-width:1000px){.earning-group-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.public-tasks .task-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){
+  .earning-group-grid,.earning-bars,.public-tasks .task-grid{grid-template-columns:1fr}
+  .review-invite{grid-template-columns:1fr;padding:20px}
+  .public-tasks{padding:36px 19px 70px}
+  .ad-slot{padding:0 19px 24px}
+  .filter-row{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+  .filter-row::-webkit-scrollbar{display:none}
+  .filter-pill,.filter-chip{flex:none}
+  .otp-input{font-size:22px;letter-spacing:.4em}
+  .announce-card{border-radius:14px}
+}
+@media (prefers-reduced-motion:reduce){.spin,.announce-card{animation:none}}
+.mobile-menu-backdrop{position:fixed;inset:0;z-index:70;background:#111d2280;display:flex;justify-content:flex-end}
+.mobile-menu{width:min(300px,86vw);height:100dvh;overflow:auto;background:var(--card);padding:16px 12px max(16px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:3px;animation:kf-slide .2s ease-out}
+.mobile-menu .section-line{padding:0 6px 12px;border-bottom:1px solid var(--border);margin-bottom:8px}
+.mobile-menu a,.mobile-menu>button:not(.app-nav-logout){display:flex;align-items:center;gap:12px;padding:12px 10px;border:0;border-radius:8px;color:var(--foreground);text-decoration:none;font:600 14px 'DM Sans',sans-serif;background:transparent;text-align:left;width:100%;cursor:pointer}
+.mobile-menu a.active,.mobile-menu>button.active{color:var(--primary);background:var(--accent)}
+.mobile-menu .app-nav-logout{font-size:14px;padding:12px 10px}
+.bottom-more{display:flex;flex:1;align-items:center;flex-direction:column;gap:3px;color:var(--muted-foreground);font-size:8px;padding:3px 1px;background:none;border:0}
+.bottom-more svg{width:17px;height:17px}
+.app-bottom-nav button{display:flex;flex:1;align-items:center;flex-direction:column;gap:3px;color:var(--muted-foreground);font-size:8px;padding:3px 1px;background:none;border:0}
+.app-bottom-nav button.active{color:var(--primary)}
+.app-bottom-nav button svg{width:17px;height:17px}
+@keyframes kf-slide{from{transform:translateX(30px);opacity:.4}to{transform:none;opacity:1}}
+@media (max-width:760px){.review-heading h2{font-size:28px;line-height:1.05}}
+/* Fix: auth panel padding previously used viewport-wide calc() and collapsed the form on desktop. */
+.auth-panel{padding:48px clamp(24px,6vw,80px);max-width:none;width:100%;box-sizing:border-box;min-width:0}
+.auth-panel>*{width:100%;max-width:520px;margin-left:auto;margin-right:auto}
+.auth-panel>.auth-brand{margin-bottom:35px}
+@media (max-width:760px){.auth-panel{padding:29px 20px 44px}}
+.activation-panel{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px}
+.activation-panel>form,.activation-panel>.notice,.activation-panel>.payment-state{grid-column:1}
+.activation-amount{grid-column:1;display:flex;flex-direction:column;gap:4px;padding:18px;border-radius:10px;background:var(--accent)}
+.activation-amount span{font-size:11px;color:var(--accent-foreground);font-weight:600}
+.activation-amount strong{font:800 34px Manrope;letter-spacing:-.04em;color:var(--primary)}
+.activation-amount small{font-size:11px;color:var(--muted-foreground)}
+.activation-steps{grid-column:2;grid-row:1/span 3;padding:4px 6px}
+.activation-steps h2{font-size:14px;margin:0 0 10px}
+.activation-steps ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:9px;font-size:12px;color:var(--muted-foreground);line-height:1.5}
+@media (max-width:760px){.activation-panel{grid-template-columns:1fr;padding:15px}.activation-steps{grid-column:1;grid-row:auto}}

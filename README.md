@@ -1,67 +1,115 @@
-# KaziFlow — Microtasks & WhatsApp Ads
+# KaziFlow — Tasks, WhatsApp Status Ads & M-Pesa
 
-KaziFlow is a mobile-first Kenyan task, advertiser and WhatsApp Status campaign platform. The full-stack application uses the existing React/Vite, Express, tRPC and Drizzle project with the Manus-managed, MySQL-compatible database. User accounts, password hashes, roles, tasks, campaign records, evidence indexes, payment attempts, wallets, immutable ledger entries, withdrawals, reviews, support tickets, settings and audit events are relational database records. Uploaded assets use managed object storage rather than container-local files.
+KaziFlow is a mobile-first Kenyan earning platform. Members register, verify their email with a six-digit code, activate once with KES 100 through M-Pesa, complete administrator-published tasks, and withdraw approved earnings to M-Pesa. Advertisers fund WhatsApp Status campaigns; administrators review all evidence before any reward is credited.
 
-## Database provider and persistence
+**Stack:** React 19 + Vite (client) · Express + tRPC (server) · Drizzle ORM + PostgreSQL · Brevo (email) · Safaricom Daraja (STK Push + B2C) · S3-compatible storage or a persistent disk for uploads.
 
-The configured provider is the **Manus-managed MySQL-compatible database**, not PostgreSQL. This is the native database capability supported by the current Manus WebDev hosting setup and the application uses Drizzle's MySQL dialect with `mysql2`. The database is a managed service separate from the published application container. Its schema and data survive server restarts and application redeployments; both development and the published container connect to the same project database. This does not mean changes in development are isolated from production.
+---
 
-PostgreSQL is not available as the managed database for this project. The WebDev database capability can be turned off to connect an external database, but moving this project to PostgreSQL would require choosing and configuring that external provider, converting the Drizzle schema and migrations to a PostgreSQL dialect, and supplying a protected production DSN. This project has not been switched to an external provider.
+## Features
 
-## Backups and migrations
+| Area | What it does |
+| --- | --- |
+| Accounts | Register (full name, email, phone, county, password), login/logout, six-digit email OTP, forgot/reset password, profile, change password. scrypt password hashing, signed HttpOnly session cookie, session invalidation on password reset. |
+| Activation | One-time KES 100 STK Push. Pending / succeeded / failed states, M-Pesa receipt, server callback **plus** server-side STK Query before activation. Duplicate and replayed callbacks are ignored. |
+| Task marketplace | 28 categories in four groups (Social Media, Online, Entertainment & Interactive, Other Earning Opportunities). Each task has title, category, description, KES reward, time estimate, slots, instructions, submission requirements, evidence rules, Start button and status. Modes: manual review, link visit, video, auto-scored quiz. One submission per member per task (one per day for daily tasks). |
+| Admin | Create/edit/suspend/delete tasks, review and approve/reject submissions, review WhatsApp evidence, campaigns, payments, withdrawals (B2C), members, advertisers, reviews, announcements, broadcast emails, support, platform settings (fees, minimums, referral commission), administrators, audit log. |
+| Wallet | Available, pending, lifetime and withdrawn balances backed by an append-only ledger with idempotency keys. Withdrawals reserve funds immediately; **Paid** is set only after a matching Safaricom B2C result (amount, phone and receipt checked). |
+| Referrals | Unique link per member, self-referral and duplicate protection, configurable commission credited once when the referred member activates. |
+| WhatsApp Status Ads | Advertisers create, upload image/MP4, fund via STK and monitor campaigns. Members submit status + insights screenshots. Reported views and approved views are kept separate; rewards are capped by per-member maximum and remaining funded budget. |
+| Reviews | Members submit one review (editable), admins approve/reject/remove. Only approved reviews show on the homepage under "WHAT KENYANS ARE SAYING ABOUT KAZIFLOW". Display name and optional county only — never email or phone. Phone numbers, emails and links are blocked in review text. |
+| Announcements | Admin push ads with image/video, link, audience, publish/expiry, pause/delete, impression and click counts. Shown as a dismissible popup on the member dashboard only (never on payment, task or withdrawal screens). |
+| AdSense-ready | `AdSlot` renders only on public content pages (homepage FAQ area, policy pages) and only after `ADSENSE_CLIENT_ID` and slot IDs are set. No ads on task, wallet or payment pages. |
 
-The application does not use JSON files or in-memory maps for accounts or financial records. A server restart does not erase MySQL rows. No project-specific automated database backup or point-in-time restore has been configured. Manus's website Task Data Backup is a separate manual, point-in-time export that includes website code, uploaded files, website database contents, configuration and secrets; it does not continuously sync later registrations or transactions. For a live site, keep fresh complete exports as a separate backup practice. The managed database surface does not provide a separate full database export/restore API or point-in-time recovery endpoint. Do not claim automatic database backups unless a separately verified backup service is configured.
+## Project layout
 
-Database structure is versioned under `drizzle/` with Drizzle's migration journal. The platform provisions the database but does not automatically apply application migrations on publish. Use `pnpm db:migrate` for each reviewed, committed migration before relying on its fields/tables. Migrations should be deterministic and additive where possible, and must be run only once per migration. Development and the published deployment share the database, so a development migration changes the live schema too; avoid destructive SQL and fabricated financial test writes. The initial KaziFlow schema migration has been generated, reviewed and applied to the connected managed database.
-
-## Local development and checks
-
-Use Node and the package-manager version pinned in `package.json`/`pnpm-lock.yaml`.
-
-```sh
-pnpm install --frozen-lockfile
-pnpm db:migrate
-pnpm dev
+```
+client/          React app (pages in client/src/pages)
+server/          Express + tRPC routers, Daraja, Brevo, storage, migrations
+server/_core/    HTTP server, sessions, tRPC context
+shared/          Rules shared by client, server and tests (money, categories, reviews)
+drizzle/         PostgreSQL schema and committed SQL migrations
+render.yaml      Render Blueprint
+Dockerfile       Optional container build
+.env.example     Every environment variable (placeholders only)
 ```
 
-The app listens on `PORT` (default `3000`). Build and check with:
+## Local development
+
+Requires Node 20.11+ (22 recommended) and PostgreSQL 14+.
 
 ```sh
-pnpm check
-pnpm test
-pnpm build
+npm install
+cp .env.example .env        # fill in local values; set KAZIFLOW_COOKIE_SECURE=false for http://localhost
+npm run db:migrate          # applies drizzle/*.sql (safe to repeat)
+npm run dev                 # http://localhost:3000
 ```
 
-`pnpm db:push` generates and applies new schema changes. Use it only after reviewing the generated SQL; prefer an explicit migration committed with the code. The container's health endpoint is `/api/health`.
+Checks:
 
-## Secure accounts, roles and sessions
+```sh
+npm run check   # TypeScript
+npm test        # unit tests (OTP, withdrawals, rewards, quizzes, reviews, Daraja, Brevo, sessions)
+npm run build   # client to dist/public, server to dist/index.js + dist/migrate.js
+```
 
-Email-and-password registration stores a salted scrypt password hash, never a plain-text password. Verification and reset tokens are stored as SHA-256 hashes, expire after 30 minutes, and can be used once. Password reset increments the account session version, invalidating earlier sessions. User and administrator roles are persisted in MySQL and checked by server-side middleware on every protected action. The primary super-admin setup is bound to the specified `ADMIN_EMAIL` and a one-time token; no default admin password is hardcoded.
+## Deploying to Render
 
-HTTPS Preview and production set an `HttpOnly; Secure; SameSite=None` cookie. Local plain-HTTP development uses a separate `SameSite=Lax` cookie setting. The app does not store login tokens in local storage. A normal top-level same-origin Android or desktop browser session works with the same server cookie; browser policies may still block third-party cookies when the site is embedded in an iframe.
+1. Push this repository to GitHub (the `.env` file is git-ignored — never commit it).
+2. In Render choose **New → Blueprint** and select the repository. `render.yaml` creates:
+   - a PostgreSQL database (`kaziflow-db`),
+   - a Node web service with a 1 GB persistent disk at `/var/data` for uploads,
+   - generated values for `KAZIFLOW_SESSION_SECRET` and `DARAJA_CALLBACK_TOKEN`.
+3. Fill in the variables marked *sync: false* (see table below).
+4. Build command: `npm ci --include=dev && npm run build` · Start command: `npm start` (runs migrations, then starts the server) · Health check: `/api/health`.
+5. After the first deploy open `https://<your-domain>/admin/setup`, enter `moseslebron29@gmail.com`, the `KAZIFLOW_ADMIN_BOOTSTRAP_TOKEN` and a strong password. Setup works only once. Then remove the bootstrap token from Render.
+6. In the Safaricom developer portal register `https://<your-domain>/api/daraja/callback` (STK) — the app appends the callback token automatically. B2C result/timeout URLs are generated from the same origin.
+7. Test with `DARAJA_ENVIRONMENT=sandbox`. Switch to `production` and set `KAZIFLOW_LIVE_PAYMENTS_ENABLED=true` only after Safaricom go-live approval.
 
-## Runtime configuration
+### Environment variables
 
-Use the platform's protected project-input workflow for credentials. Never put real values in source, `.env.example`, client code, shell history or Git. See [.env.example](.env.example) for names/placeholders and [API.md](API.md) for the API namespaces. The managed platform supplies the database DSN and storage credentials.
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `DATABASE_URL` | yes | PostgreSQL connection string (Render internal URL). |
+| `DATABASE_SSL` | no | `true` when using an external/public database URL. |
+| `DATABASE_POOL_MAX` | no | Connection pool size (default 10). |
+| `NODE_ENV` | yes | `production` on Render. |
+| `PORT` | auto | Set by Render. |
+| `KAZIFLOW_PUBLIC_ORIGIN` | yes | Public `https://` address; used in emails and callbacks. |
+| `KAZIFLOW_SESSION_SECRET` | yes | 32+ random characters; signs sessions and OTP hashes. |
+| `KAZIFLOW_COOKIE_SECURE` | no | `false` only for http local development. |
+| `ADMIN_EMAIL` | yes | Primary super-administrator email. |
+| `KAZIFLOW_ADMIN_BOOTSTRAP_TOKEN` | first deploy | One-time admin setup token (32+ characters). |
+| `KAZIFLOW_BREVO_API_KEY` | yes | Brevo API key (server only). `BREVO_API_KEY` is accepted as an alias. |
+| `KAZIFLOW_EMAIL_FROM` | yes | Verified Brevo sender, e.g. `KaziFlow <no-reply@domain>`. |
+| `DARAJA_ENVIRONMENT` | yes | `sandbox` or `production`. |
+| `DARAJA_CONSUMER_KEY`, `DARAJA_CONSUMER_SECRET` | yes | Daraja app credentials. |
+| `DARAJA_SHORTCODE`, `DARAJA_PASSKEY` | yes | STK Push shortcode and passkey. |
+| `DARAJA_TRANSACTION_TYPE` | no | `CustomerPayBillOnline` (default) or `CustomerBuyGoodsOnline`. |
+| `DARAJA_PARTY_B` | no | Till number for Buy Goods when different from the shortcode. |
+| `DARAJA_CALLBACK_URL` | yes | `https://<domain>/api/daraja/callback`. |
+| `DARAJA_CALLBACK_TOKEN` | yes | Random secret added to all M-Pesa callback URLs. |
+| `KAZIFLOW_LIVE_PAYMENTS_ENABLED` | production | Must be `true` before live payments start. |
+| `DARAJA_B2C_SHORTCODE`, `DARAJA_B2C_INITIATOR_NAME`, `DARAJA_B2C_SECURITY_CREDENTIAL` | for withdrawals | B2C payout configuration. |
+| `DARAJA_B2C_CONSUMER_KEY`, `DARAJA_B2C_CONSUMER_SECRET` | no | Only if B2C uses a separate Daraja app. |
+| `DARAJA_B2C_COMMAND_ID` | no | Default `BusinessPayment`. |
+| `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE` | recommended | S3-compatible storage for uploads (R2/S3/B2). |
+| `UPLOAD_DIR` | if no S3 | Disk path for uploads; on Render use the persistent disk (`/var/data/uploads`). |
+| `ADSENSE_CLIENT_ID`, `VITE_ADSENSE_SLOT_HOME`, `VITE_ADSENSE_SLOT_POLICY` | no | Only after Google approves the site. `VITE_*` values are read at build time. |
 
-Brevo transactional email requires `KAZIFLOW_BREVO_API_KEY`, a Brevo-verified `KAZIFLOW_EMAIL_FROM` sender and an HTTPS `KAZIFLOW_PUBLIC_ORIGIN`. Production verification/reset URLs must use the published site's actual HTTPS origin. Without all three settings, KaziFlow reports email delivery as unconfigured. Brevo's server-side API key never enters browser code.
+`BREVO_API_URL_OVERRIDE` and `DARAJA_BASE_URL_OVERRIDE` exist only for local testing against mock servers and are ignored when `NODE_ENV=production`.
 
-The initial primary administrator requires `ADMIN_EMAIL` and `KAZIFLOW_ADMIN_BOOTSTRAP_TOKEN`. The token must be a private random value of at least 32 characters. Use it once at `/admin/setup` with a new password, then rotate/remove it. The application does not ship a default administrator password.
+## Security notes
 
-Safaricom Daraja STK Push requires `DARAJA_CONSUMER_KEY`, `DARAJA_CONSUMER_SECRET`, `DARAJA_SHORTCODE`, `DARAJA_PASSKEY`, `DARAJA_ENVIRONMENT` and `DARAJA_CALLBACK_URL`. The callback must be a public HTTPS URL ending exactly in `/api/daraja/callback`. Use `sandbox` while testing. The server matches callback phone, amount and receipt, queries Daraja server-side and grants activation/funding only after confirmation. Production STK requests remain disabled unless `KAZIFLOW_LIVE_PAYMENTS_ENABLED=true` is deliberately set after separate go-live approval.
+- All credentials are read from server environment variables; nothing secret is shipped to the browser.
+- Roles (`user`, `admin`, `super_admin`) are checked server-side on every admin procedure; only a super-admin can grant administrator access. Profile updates cannot change roles.
+- OTPs are HMAC-hashed, expire after 10 minutes, allow 5 attempts, have a 60-second resend cooldown and an hourly cap. A per-account database lock prevents racing the limits. Codes are never logged or returned by the API, and are not put in email subjects.
+- Request rate limits (login, registration, OTP, uploads, reviews) are kept in memory per server instance — adequate for one Render instance; use a shared store if you scale horizontally.
+- Uploads are type- and size-checked, stored under random keys, hashed to detect reused evidence, and evidence files are served only to their owner and administrators.
+- Ledger entries carry unique idempotency keys so approvals, referral commissions and callbacks cannot pay twice.
 
-A dedicated `KAZIFLOW_SESSION_SECRET` (minimum 32 characters) is optional in the managed environment. If absent, the app derives a project-specific key from the injected platform secret and project ID. Do not expose that derived key.
+## Database
 
-## Product and money-handling boundaries
+Schema: `drizzle/schema.ts`. Migrations: `drizzle/0000_initial_postgres.sql` (+ journal). `npm start` runs `dist/migrate.js` before the server, so new committed migrations apply automatically on each deploy. To create a new migration after a schema change: `npx drizzle-kit generate`, review the SQL, commit it.
 
-The activation fee defaults to KES 100. A task or WhatsApp submission does not become available balance until approved; credits use idempotent ledger keys and database transactions. WhatsApp Status evidence consists of member-submitted screenshots. Moderators can approve a capped number of screenshot-reported views, but the screenshots do not independently prove the identity or count of viewers. Advertiser reporting therefore describes administrator-reviewed screenshot-reported views. Video-task timing is an elapsed-time gate plus manual evidence review, not proof that an external video played continuously.
-
-Withdrawal requests reserve available funds. The supported states are Pending, Processing and reasoned Rejected. `Paid` is intentionally unavailable until a real M-Pesa B2C or equivalent payout provider and independently verifiable disbursement receipt are integrated. An administrator-entered receipt alone is not treated as provider confirmation. Advertiser campaigns are not activated until funding is confirmed and an administrator approves activation. Initial public review cards are labelled demonstrations; only moderated, approved member submissions are shown as real feedback.
-
-## Deployment and publication
-
-Before public release, configure Brevo's verified sender and the production `KAZIFLOW_PUBLIC_ORIGIN`, confirm the publicly reachable Daraja callback, and decide whether activation payments should remain sandboxed. No real payment is initiated during code checks. The configured container uses the managed database and `/api/health` for readiness.
-
-The current project setting has auto-publish enabled. A push/checkpoint to the canonical branch may publish the application. No GitHub push or publication is authorized by this documentation; wait for the owner to request it after the requested checks and review.
-
-See [Safaricom integration notes](daraja-notes.md) and [API reference](API.md). KaziFlow uses its own name, logo and design rather than copying the reference platform.
+Render PostgreSQL includes daily backups on paid plans; confirm your plan's backup retention in the Render dashboard.

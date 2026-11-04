@@ -21,7 +21,13 @@ import {
   Users,
   WalletCards,
   X,
+  Megaphone,
+  Mail,
+  Store,
+  Menu,
 } from "lucide-react";
+import { TASK_CATEGORIES, TASK_GROUPS, categoryLabel } from "@shared/taskCategories";
+import { AdvertisersAdmin, AnnouncementsAdmin, EmailsAdmin, fromLocalInput, toLocalInput } from "./AdminExtras";
 import { Wordmark } from "../components/Brand";
 import { UserHistoryModal } from "../components/UserHistoryModal";
 import { useTheme } from "../contexts/ThemeContext";
@@ -30,13 +36,16 @@ import { formatKes } from "../lib/format";
 
 const tabs = [
   ["overview", "Overview", Home],
-  ["users", "Users", Users],
+  ["users", "Members", Users],
+  ["advertisers", "Advertisers", Store],
   ["tasks", "Tasks", BriefcaseBusiness],
   ["task-review", "Task review", FileCheck2],
   ["wa-review", "WhatsApp evidence", Eye],
   ["campaigns", "Ad campaigns", Activity],
   ["payments", "M-Pesa payments", CircleDollarSign],
   ["withdrawals", "Withdrawals", WalletCards],
+  ["announcements", "Announcements", Megaphone],
+  ["emails", "Emails", Mail],
   ["support", "Support inbox", MessageSquareText],
   ["reviews", "Member reviews", BadgeCheck],
   ["settings", "Platform settings", Settings],
@@ -83,21 +92,26 @@ export default function AdminPortal({
   const utils = trpc.useUtils();
   const announce = trpc.auth.status.useQuery();
   const overview = trpc.admin.overview.useQuery(undefined, {
-    enabled: tab === "overview",
+    refetchInterval: 60_000,
   });
   const [search, setSearch] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [reviewSearch, setReviewSearch] = useState("");
   const [reviewRating, setReviewRating] = useState<number | undefined>();
+  const [userType, setUserType] = useState<"all" | "member" | "advertiser">("all");
+  const [userState, setUserState] = useState<"all" | "unverified" | "not_activated" | "activated" | "suspended">("all");
+  const [subStatus, setSubStatus] = useState<"pending" | "approved" | "rejected">("pending");
+  const [wdStatus, setWdStatus] = useState<"" | "pending" | "processing" | "paid" | "payout_failed" | "rejected">("");
+  const [reviewStatus, setReviewStatus] = useState<"pending" | "approved" | "rejected" | "removed" | "all">("pending");
   const usersQuery = trpc.admin.users.useQuery(
-    { query: search || undefined },
+    { query: search || undefined, accountType: userType, state: userState },
     { enabled: tab === "users" }
   );
   const tasksQuery = trpc.admin.tasks.useQuery(undefined, {
     enabled: tab === "tasks",
   });
   const taskSubmissions = trpc.admin.taskSubmissions.useQuery(
-    { status: "pending" },
+    { status: subStatus },
     { enabled: tab === "task-review" }
   );
   const waSubmissions = trpc.admin.whatsappSubmissions.useQuery(
@@ -110,7 +124,7 @@ export default function AdminPortal({
   const payments = trpc.admin.payments.useQuery(undefined, {
     enabled: tab === "payments",
   });
-  const withdrawals = trpc.admin.withdrawals.useQuery(undefined, {
+  const withdrawals = trpc.admin.withdrawals.useQuery(wdStatus ? { status: wdStatus } : undefined, {
     enabled: tab === "withdrawals",
   });
   const tickets = trpc.admin.supportTickets.useQuery(
@@ -118,7 +132,7 @@ export default function AdminPortal({
     { enabled: tab === "support" }
   );
   const reviewQueue = trpc.reviews.adminList.useQuery(
-    { status: "pending", query: reviewSearch || undefined, rating: reviewRating },
+    { status: reviewStatus, query: reviewSearch || undefined, rating: reviewRating },
     { enabled: tab === "reviews" }
   );
   const userHistory = trpc.admin.userHistory.useQuery(
@@ -189,15 +203,14 @@ export default function AdminPortal({
       await utils.admin.payments.invalidate();
     },
   });
-  const updateWithdrawal = trpc.admin.processWithdrawal.useMutation({
-    onSuccess: async () => {
-      toast.success("Withdrawal request updated.");
-      await Promise.all([
-        utils.admin.withdrawals.invalidate(),
-        utils.admin.overview.invalidate(),
-      ]);
-    },
-  });
+  const wdDone = async (msg: string) => {
+    toast.success(msg);
+    await Promise.all([utils.admin.withdrawals.invalidate(), utils.admin.overview.invalidate()]);
+  };
+  const payWithdrawal = trpc.admin.payWithdrawal.useMutation({ onSuccess: () => wdDone("Payout sent to M-Pesa. Waiting for Safaricom's confirmation."), onError: e => toast.error(e.message) });
+  const rejectWithdrawal = trpc.admin.rejectWithdrawal.useMutation({ onSuccess: () => wdDone("Withdrawal rejected and funds returned."), onError: e => toast.error(e.message) });
+  const failWithdrawal = trpc.admin.markPayoutFailed.useMutation({ onSuccess: () => wdDone("Marked as payout failed."), onError: e => toast.error(e.message) });
+  const setTaskStatus = trpc.admin.setTaskStatus.useMutation({ onSuccess: async () => { toast.success("Task status updated."); await utils.admin.tasks.invalidate(); }, onError: e => toast.error(e.message) });
   const supportReply = trpc.admin.respondSupportTicket.useMutation({
     onSuccess: async () => {
       toast.success("Support response saved.");
@@ -228,33 +241,40 @@ export default function AdminPortal({
       await utils.admin.settings.invalidate();
     },
   });
+  const [editorKey, setEditorKey] = useState(0);
   const createTask = trpc.admin.createTask.useMutation({
     onSuccess: async () => {
+      setEditorKey(k => k + 1);
       toast.success("Task saved to the marketplace.");
       await Promise.all([
         utils.admin.tasks.invalidate(),
         utils.admin.overview.invalidate(),
       ]);
     },
+    onError: e => toast.error(e.message),
   });
   const editTask = trpc.admin.updateTask.useMutation({
     onSuccess: async () => {
       toast.success("Task updated.");
       await utils.admin.tasks.invalidate();
     },
+    onError: e => toast.error(e.message),
   });
   const archiveTask = trpc.admin.deleteTask.useMutation({
-    onSuccess: async () => {
-      toast.success("Task archived; submission records were retained.");
+    onSuccess: async r => {
+      toast.success(r.deleted ? "Task deleted." : "Task has submissions, so it was closed instead (history kept).");
       await utils.admin.tasks.invalidate();
     },
+    onError: e => toast.error(e.message),
   });
   const isSuper = user.role === "super_admin";
+  const ov = overview.data;
   const switchTab = (newTab: Tab) => {
     setTab(newTab);
     window.history.replaceState({}, "", `/admin?tab=${newTab}`);
   };
   const tabLabel = tabs.find(item => item[0] === tab)?.[1] ?? "Overview";
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const render = () => {
     if (tab === "overview")
@@ -265,32 +285,24 @@ export default function AdminPortal({
             subtitle="Live counts from KaziFlow records. No sample users, payments or balances are seeded."
           />
           <div className="dashboard-grid">
-            <Metric label="Registered users" value={overview.data?.users} />
-            <Metric
-              label="Activated members"
-              value={overview.data?.activatedUsers}
-            />
-            <Metric label="Tasks listed" value={overview.data?.tasks} />
-            <Metric
-              label="Pending task submissions"
-              value={overview.data?.pendingTaskSubmissions}
-            />
-            <Metric
-              label="WhatsApp evidence queue"
-              value={overview.data?.pendingWhatsAppReviews}
-            />
-            <Metric
-              label="Active campaigns"
-              value={overview.data?.activeCampaigns}
-            />
-            <Metric
-              label="Payments to investigate"
-              value={overview.data?.paymentsToInvestigate}
-            />
-            <Metric
-              label="Pending withdrawals"
-              value={overview.data?.pendingWithdrawals}
-            />
+            <Metric label="Members" value={ov?.members} />
+            <Metric label="Verified emails" value={ov?.verifiedUsers} />
+            <Metric label="Activated members" value={ov?.activatedUsers} />
+            <Metric label="Advertisers" value={ov?.advertisers} />
+            <Metric label="Active tasks" value={ov?.activeTasks} />
+            <Metric label="Tasks to review" value={ov?.pendingTaskSubmissions} />
+            <Metric label="WhatsApp evidence to review" value={ov?.pendingWhatsAppReviews} />
+            <Metric label="Active campaigns" value={ov?.activeCampaigns} />
+            <Metric label="Pending withdrawals" value={ov?.pendingWithdrawals} />
+            <Metric label="Failed payouts" value={ov?.failedPayouts} />
+            <Metric label="Payments to investigate" value={ov?.paymentsToInvestigate} />
+            <Metric label="Reviews to moderate" value={ov?.pendingReviews} />
+          </div>
+          <div className="dashboard-grid">
+            <MoneyMetric label="Activation fees received" value={ov?.activationRevenueMinor} />
+            <MoneyMetric label="Campaign funding received" value={ov?.campaignFundingMinor} />
+            <MoneyMetric label="Rewards credited to members" value={ov?.creditedMinor} />
+            <MoneyMetric label="Paid out to M-Pesa" value={ov?.paidOutMinor} />
           </div>
           <section className="surface surface-pad">
             <h2 className="surface-title">Operational guardrails</h2>
@@ -304,8 +316,8 @@ export default function AdminPortal({
                 verification of every viewer.
               </li>
               <li>
-                Withdrawal Paid status stays locked until a payout provider
-                callback can confirm actual disbursement.
+                Withdrawals become Paid only from Safaricom's B2C result
+                callback, with amount, phone and receipt matched.
               </li>
               <li>
                 Actions that change permissions, campaign spend, reviews or
@@ -332,6 +344,18 @@ export default function AdminPortal({
                 onChange={e => setSearch(e.target.value)}
               />
             </label>
+            <select className="select select-compact" aria-label="Account type" value={userType} onChange={e => setUserType(e.target.value as any)}>
+              <option value="all">All accounts</option>
+              <option value="member">Members</option>
+              <option value="advertiser">Advertisers</option>
+            </select>
+            <select className="select select-compact" aria-label="Account state" value={userState} onChange={e => setUserState(e.target.value as any)}>
+              <option value="all">Any status</option>
+              <option value="unverified">Email not verified</option>
+              <option value="not_activated">Verified, not activated</option>
+              <option value="activated">Activated</option>
+              <option value="suspended">Suspended</option>
+            </select>
           </div>
           <section className="surface surface-pad">
             {usersQuery.isLoading ? (
@@ -364,7 +388,7 @@ export default function AdminPortal({
                         </td>
                         <td>
                           <Badge
-                            value={row.activatedAt ? "activated" : "inactive"}
+                            value={row.suspendedAt ? "suspended" : row.activatedAt ? "activated" : row.emailVerifiedAt ? "not_activated" : "unverified"}
                           />
                         </td>
                         <td>{row.mpesaPhone ?? "—"}</td>
@@ -434,6 +458,7 @@ export default function AdminPortal({
             subtitle="Create, edit, pause or archive approved activities. Rewards and slot capacity cannot exceed each task's configured budget."
           />
           <AdminTaskEditor
+            key={editorKey}
             create={(v: any) => createTask.mutate(v)}
             createBusy={createTask.isPending}
           />
@@ -466,7 +491,7 @@ export default function AdminPortal({
                             {row.description}
                           </small>
                         </td>
-                        <td>{row.category}</td>
+                        <td>{categoryLabel(row.category)}</td>
                         <td>{formatKes(row.rewardMinor)}</td>
                         <td>
                           {formatKes(row.budgetMinor)} /{" "}
@@ -486,11 +511,22 @@ export default function AdminPortal({
                               update={(v: any) => editTask.mutate(v)}
                               updateBusy={editTask.isPending}
                             />
+                            {row.status === "active" ? (
+                              <button className="button-app secondary" onClick={() => setTaskStatus.mutate({ id: row.id, status: "paused" })}>
+                                Suspend
+                              </button>
+                            ) : row.status !== "closed" ? (
+                              <button className="button-app secondary" onClick={() => setTaskStatus.mutate({ id: row.id, status: "active" })}>
+                                Activate
+                              </button>
+                            ) : null}
                             <button
-                              className="button-app secondary"
-                              onClick={() => archiveTask.mutate({ id: row.id })}
+                              className="button-app danger"
+                              onClick={() => {
+                                if (window.confirm("Delete this task? If members already submitted it, it will be closed instead.")) archiveTask.mutate({ id: row.id });
+                              }}
                             >
-                              Archive
+                              Delete
                             </button>
                           </div>
                         </td>
@@ -508,14 +544,21 @@ export default function AdminPortal({
         <>
           <Intro
             title="Task submission review."
-            subtitle="Approve only after checking the requested proof. Credits are applied transactionally and never on browser submission alone."
+            subtitle="Approve only after checking the proof. Each submission can be credited once; rejections free the slot and email the member."
           />
+          <div className="filter-row">
+            {(["pending", "approved", "rejected"] as const).map(v => (
+              <button key={v} type="button" className={`filter-pill ${subStatus === v ? "active" : ""}`} onClick={() => setSubStatus(v)}>
+                {v[0]!.toUpperCase() + v.slice(1)}
+              </button>
+            ))}
+          </div>
           {taskSubmissions.isLoading ? (
             <p className="muted">Loading queue…</p>
           ) : !taskSubmissions.data?.length ? (
             <Empty
-              title="Task queue clear"
-              text="There are no pending submissions."
+              title={subStatus === "pending" ? "Task queue clear" : `No ${subStatus} submissions`}
+              text={subStatus === "pending" ? "There are no pending submissions." : undefined}
             />
           ) : (
             <div className="review-queue">
@@ -755,27 +798,55 @@ export default function AdminPortal({
         <>
           <Intro
             title="M-Pesa withdrawal requests."
-            subtitle="Move requests to Processing or reject with a reason. Paid is unavailable until a provider callback can confirm actual disbursement."
+            subtitle="Approve to send via M-Pesa B2C, or reject with a reason (funds return to the member). Paid is set only when Safaricom confirms the payout."
           />
+          <div className="filter-row">
+            {(["", "pending", "processing", "payout_failed", "paid", "rejected"] as const).map(v => (
+              <button key={v || "all"} type="button" className={`filter-pill ${wdStatus === v ? "active" : ""}`} onClick={() => setWdStatus(v)}>
+                {v ? v.replaceAll("_", " ") : "All"}
+              </button>
+            ))}
+          </div>
           {withdrawals.isLoading ? (
             <p className="muted">Loading requests…</p>
-          ) : !withdrawals.data?.length ? (
-            <Empty
-              title="No withdrawal requests"
-              text="There are no member withdrawal records yet."
-            />
+          ) : !withdrawals.data?.rows.length ? (
+            <Empty title="No withdrawal requests" text="Nothing matches this filter." />
           ) : (
             <div className="withdrawal-admin-list">
-              {withdrawals.data.map((row: any) => (
+              {withdrawals.data.rows.map((row: any) => (
                 <AdminWithdrawal
                   key={row.withdrawal.id}
                   row={row}
-                  onUpdate={(input: any) => updateWithdrawal.mutate(input)}
-                  busy={updateWithdrawal.isPending}
+                  b2c={withdrawals.data!.b2cReady}
+                  onPay={() => payWithdrawal.mutate({ id: row.withdrawal.id })}
+                  onReject={note => rejectWithdrawal.mutate({ id: row.withdrawal.id, note })}
+                  onFail={note => failWithdrawal.mutate({ id: row.withdrawal.id, note })}
+                  busy={payWithdrawal.isPending || rejectWithdrawal.isPending || failWithdrawal.isPending}
                 />
               ))}
             </div>
           )}
+        </>
+      );
+    if (tab === "advertisers")
+      return (
+        <>
+          <Intro title="Advertisers." subtitle="Advertiser accounts, their campaigns, confirmed funding and approved spend." />
+          <AdvertisersAdmin onSuspend={(userId, suspended) => suspend.mutate({ userId, suspended }, { onSuccess: () => void utils.admin.advertisers.invalidate() })} />
+        </>
+      );
+    if (tab === "announcements")
+      return (
+        <>
+          <Intro title="Announcements & push ads." subtitle="Create dismissible popups for members with optional image/video, link, schedule and audience. Impressions and clicks are counted once per member." />
+          <AnnouncementsAdmin />
+        </>
+      );
+    if (tab === "emails")
+      return (
+        <>
+          <Intro title="Emails." subtitle="Brevo transactional emails and important announcements." />
+          <EmailsAdmin />
         </>
       );
     if (tab === "support")
@@ -817,8 +888,15 @@ export default function AdminPortal({
         <>
           <Intro
             title="Member review moderation."
-            subtitle="Member reviews are private until approved. Samples displayed on the homepage are clearly labeled demonstrations, not customer claims."
+            subtitle="Reviews stay private until approved. Only approved reviews appear on the homepage, with the member's chosen display name."
           />
+          <div className="filter-row">
+            {(["pending", "approved", "rejected", "removed", "all"] as const).map(v => (
+              <button key={v} type="button" className={`filter-pill ${reviewStatus === v ? "active" : ""}`} onClick={() => setReviewStatus(v)}>
+                {v[0]!.toUpperCase() + v.slice(1)}
+              </button>
+            ))}
+          </div>
           <div className="filter-row">
             <label className="search-input">
               <Search size={15} />
@@ -852,8 +930,8 @@ export default function AdminPortal({
             <p className="muted">Loading reviews…</p>
           ) : !reviewQueue.data?.length ? (
             <Empty
-              title="Review queue clear"
-              text="No pending member reviews."
+              title="Nothing here"
+              text="No reviews match this filter."
             />
           ) : (
             <div className="review-queue">
@@ -906,6 +984,12 @@ export default function AdminPortal({
                     announce.data?.mailerReady ? "configured" : "not_configured"
                   }
                 />
+              </span>
+              <span>
+                M-Pesa B2C payouts <Badge value={ov?.integrations.b2c ? "configured" : "not_configured"} />
+              </span>
+              <span>
+                File storage <Badge value={ov?.integrations.storage === "s3" ? "s3_storage" : "local_disk"} />
               </span>
               <span>
                 Application session{" "}
@@ -1052,12 +1136,10 @@ export default function AdminPortal({
             >
               <Icon />
               <span>{label}</span>
-              {key === "wa-review" &&
-                (overview.data?.pendingWhatsAppReviews ?? 0) > 0 && (
-                  <i className="nav-count">
-                    {overview.data?.pendingWhatsAppReviews}
-                  </i>
-                )}
+              {(() => {
+                const n = key === "wa-review" ? ov?.pendingWhatsAppReviews : key === "task-review" ? ov?.pendingTaskSubmissions : key === "withdrawals" ? ov?.pendingWithdrawals : key === "reviews" ? ov?.pendingReviews : key === "support" ? ov?.openTickets : 0;
+                return n ? <i className="nav-count">{n}</i> : null;
+              })()}
             </button>
           ))}
         </nav>
@@ -1086,14 +1168,32 @@ export default function AdminPortal({
       <div className="app-main">
         <div className="app-mobile-head">
           <Wordmark />
-          <button
-            className="topbar-icon"
-            aria-label="Toggle theme"
-            onClick={() => theme.toggleTheme?.()}
-          >
-            <Sun size={15} />
+          <button className="topbar-icon" aria-label="Open admin menu" onClick={() => setMenuOpen(true)}>
+            <Menu size={16} />
           </button>
         </div>
+        {menuOpen && (
+          <div className="mobile-menu-backdrop" onClick={() => setMenuOpen(false)}>
+            <nav className="mobile-menu" aria-label="Admin menu" onClick={e => e.stopPropagation()}>
+              <div className="section-line">
+                <b>Administration</b>
+                <button className="topbar-icon" onClick={() => setMenuOpen(false)} aria-label="Close menu">
+                  <X size={16} />
+                </button>
+              </div>
+              {visibleTabs.map(([key, label, Icon]) => (
+                <button key={key} className={tab === key ? "active" : ""} onClick={() => { switchTab(key); setMenuOpen(false); }}>
+                  <Icon size={17} />
+                  <span>{label}</span>
+                </button>
+              ))}
+              <button type="button" className="app-nav-logout" onClick={onLogout}>
+                <LogOut />
+                <span>Logout</span>
+              </button>
+            </nav>
+          </div>
+        )}
         <header className="app-topbar">
           <span className="app-topbar-title">
             KaziFlow control room / {tabLabel}
@@ -1174,6 +1274,14 @@ function Metric({ label, value }: { label: string; value: unknown }) {
     </div>
   );
 }
+function MoneyMetric({ label, value }: { label: string; value: number | undefined }) {
+  return (
+    <div className="metric-card">
+      <div className="metric-label">{label}</div>
+      <strong className="metric-value">{value === undefined ? "—" : formatKes(value)}</strong>
+    </div>
+  );
+}
 function Badge({ value }: { value: string }) {
   return (
     <span
@@ -1195,6 +1303,7 @@ function Empty({ title, text }: { title: string; text?: string }) {
   );
 }
 
+type QuizDraft = { question: string; options: string[]; answerIndex: number };
 function AdminTaskEditor({
   initial,
   inline = false,
@@ -1211,195 +1320,200 @@ function AdminTaskEditor({
   updateBusy?: boolean;
 }) {
   const [open, setOpen] = useState(!inline);
-  const [form, setForm] = useState({
-    category: initial?.category ?? "survey",
+  const initialQuiz: QuizDraft[] = (() => {
+    try {
+      return initial?.quizJson ? JSON.parse(initial.quizJson) : [];
+    } catch {
+      return [];
+    }
+  })();
+  const [form, setForm] = useState<Record<string, string>>({
+    category: initial?.category ?? "tiktok",
     title: initial?.title ?? "",
     description: initial?.description ?? "",
     instructions: initial?.instructions ?? "",
     completionRequirements: initial?.completionRequirements ?? "",
-    rewardKes: String((initial?.rewardMinor ?? 500) / 100),
-    budgetKes: String((initial?.budgetMinor ?? 50000) / 100),
+    rewardKes: String((initial?.rewardMinor ?? 1000) / 100),
+    budgetKes: String((initial?.budgetMinor ?? 100000) / 100),
     estimatedMinutes: String(initial?.estimatedMinutes ?? 5),
     slotLimit: String(initial?.slotLimit ?? 100),
     completionMode: initial?.completionMode ?? "manual",
     externalUrl: initial?.externalUrl ?? "",
+    sponsorName: initial?.sponsorName ?? "",
+    passMark: String(initial?.passMark ?? 70),
+    startsAt: toLocalInput(initial?.startsAt),
+    expiresAt: toLocalInput(initial?.expiresAt),
     status: initial?.status ?? "draft",
   });
+  const [flags, setFlags] = useState({
+    requiresEvidence: Boolean(initial?.requiresEvidence),
+    repeatDaily: Boolean(initial?.repeatDaily),
+    autoApproveQuiz: Boolean(initial?.autoApproveQuiz),
+    featured: Boolean(initial?.featured),
+  });
+  const [quiz, setQuiz] = useState<QuizDraft[]>(initialQuiz.length ? initialQuiz : [{ question: "", options: ["", ""], answerIndex: 0 }]);
   const put = (k: string, v: string) => setForm(c => ({ ...c, [k]: v }));
+  const budgetNeeded = Number(form.rewardKes || 0) * Number(form.slotLimit || 0);
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const payload = {
       ...form,
+      category: form.category as any,
+      completionMode: form.completionMode as any,
       rewardKes: Number(form.rewardKes),
       budgetKes: Number(form.budgetKes),
       estimatedMinutes: Number(form.estimatedMinutes),
       slotLimit: Number(form.slotLimit),
-      externalUrl: form.externalUrl.trim() || undefined,
+      passMark: Number(form.passMark),
+      externalUrl: form.externalUrl!.trim() || undefined,
+      sponsorName: form.sponsorName!.trim() || null,
+      startsAt: fromLocalInput(form.startsAt!),
+      expiresAt: fromLocalInput(form.expiresAt!),
+      quizJson: form.completionMode === "quiz" ? JSON.stringify(quiz.map(q => ({ ...q, options: q.options.filter(o => o.trim()) }))) : null,
       status: form.status as any,
+      ...flags,
     };
     if (initial?.id) update?.({ id: initial.id, ...payload });
     else create?.(payload);
-    if (!inline) setOpen(false);
+    if (inline) setOpen(false);
   };
   return (
     <>
       {inline ? (
-        <button
-          className="button-app secondary"
-          onClick={() => setOpen(v => !v)}
-        >
+        <button className="button-app secondary" onClick={() => setOpen(v => !v)}>
           {open ? "Close" : "Edit"}
         </button>
       ) : (
         <section className="surface surface-pad" style={{ marginTop: 12 }}>
           <div className="section-line">
             <h2 className="surface-title">Create a task</h2>
-            <span className="badge">Fund reward pool before publishing</span>
+            <span className="badge">Budget must cover reward × slots</span>
           </div>
-          <p className="small-muted">
-            Choose active only when the brief and reward budget are ready for
-            member submissions.
-          </p>
+          <p className="small-muted">Save as draft first, then set Active when the brief and budget are ready.</p>
         </section>
       )}
       {open && (
-        <form
-          className={`admin-task-form ${inline ? "inline-editor" : "surface surface-pad"}`}
-          onSubmit={submit}
-        >
+        <form className={`admin-task-form ${inline ? "inline-editor" : "surface surface-pad"}`} onSubmit={submit}>
           <div className="field-grid">
             <label className="field">
               <span>Category</span>
-              <select
-                className="select"
-                value={form.category}
-                onChange={e => put("category", e.target.value)}
-              >
-                {[
-                  "survey",
-                  "video",
-                  "social",
-                  "website",
-                  "microtask",
-                  "chat",
-                  "writing",
-                  "daily",
-                  "promotion",
-                ].map(v => (
-                  <option key={v}>{v}</option>
+              <select className="select" value={form.category} onChange={e => put("category", e.target.value)}>
+                {TASK_GROUPS.map(g => (
+                  <optgroup key={g.id} label={g.label}>
+                    {TASK_CATEGORIES.filter(c => c.group === g.id).map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
             </label>
             <label className="field">
               <span>Status</span>
-              <select
-                className="select"
-                value={form.status}
-                onChange={e => put("status", e.target.value)}
-              >
-                {["draft", "active", "paused", "closed"].map(v => (
-                  <option key={v}>{v}</option>
-                ))}
+              <select className="select" value={form.status} onChange={e => put("status", e.target.value)}>
+                <option value="draft">Draft</option>
+                <option value="active">Active</option>
+                <option value="paused">Paused (suspended)</option>
+                <option value="closed">Closed</option>
               </select>
             </label>
-            <Field
-              form={form}
-              put={put}
-              k="title"
-              label="Task title"
-              required
-            />
-            <Field
-              form={form}
-              put={put}
-              k="rewardKes"
-              label="Reward (KES)"
-              type="number"
-              required
-            />
-            <Field
-              form={form}
-              put={put}
-              k="budgetKes"
-              label="Total allocated reward budget (KES)"
-              type="number"
-              required
-            />
-            <Field
-              form={form}
-              put={put}
-              k="estimatedMinutes"
-              label="Estimated minutes"
-              type="number"
-              required
-            />
-            <Field
-              form={form}
-              put={put}
-              k="slotLimit"
-              label="Participant slots"
-              type="number"
-              required
-            />
+            <Field form={form} put={put} k="title" label="Task title" required />
+            <Field form={form} put={put} k="rewardKes" label="Reward per completion (KES)" type="number" required />
+            <Field form={form} put={put} k="slotLimit" label="Available slots" type="number" required />
             <label className="field">
-              <span>Completion mode</span>
-              <select
-                className="select"
-                value={form.completionMode}
-                onChange={e => put("completionMode", e.target.value)}
-              >
-                {["manual", "video_progress", "link_visit"].map(v => (
-                  <option value={v} key={v}>
-                    {v.replaceAll("_", " ")}
-                  </option>
-                ))}
+              <span>Total reward budget (KES)</span>
+              <input className="input" type="number" required value={form.budgetKes} onChange={e => put("budgetKes", e.target.value)} />
+              <small>Needs at least KES {budgetNeeded.toLocaleString()} for all slots.</small>
+            </label>
+            <Field form={form} put={put} k="estimatedMinutes" label="Estimated completion time (minutes)" type="number" required />
+            <label className="field">
+              <span>How members complete it</span>
+              <select className="select" value={form.completionMode} onChange={e => put("completionMode", e.target.value)}>
+                <option value="manual">Written proof (+ optional screenshot)</option>
+                <option value="link_visit">Visit a link, then submit proof</option>
+                <option value="video_progress">Watch video (full time required)</option>
+                <option value="quiz">Quiz / trivia (auto-scored)</option>
               </select>
             </label>
-            <Field
-              form={form}
-              put={put}
-              k="externalUrl"
-              label="Optional work URL"
-              type="url"
-            />
+            <Field form={form} put={put} k="externalUrl" label="Task link (https://, optional)" type="url" />
+            <Field form={form} put={put} k="sponsorName" label="Sponsor / advertiser name (optional)" />
+            <label className="field">
+              <span>Starts (optional)</span>
+              <input className="input" type="datetime-local" value={form.startsAt} onChange={e => put("startsAt", e.target.value)} />
+            </label>
+            <label className="field">
+              <span>Ends (optional, for limited-time tasks)</span>
+              <input className="input" type="datetime-local" value={form.expiresAt} onChange={e => put("expiresAt", e.target.value)} />
+            </label>
             <label className="field full">
               <span>Description</span>
-              <textarea
-                className="textarea"
-                minLength={5}
-                maxLength={5000}
-                required
-                value={form.description}
-                onChange={e => put("description", e.target.value)}
-              />
+              <textarea className="textarea" minLength={5} maxLength={5000} required value={form.description} onChange={e => put("description", e.target.value)} />
             </label>
             <label className="field full">
-              <span>Instructions</span>
-              <textarea
-                className="textarea"
-                minLength={3}
-                maxLength={5000}
-                required
-                value={form.instructions}
-                onChange={e => put("instructions", e.target.value)}
-              />
+              <span>Instructions (step by step)</span>
+              <textarea className="textarea" minLength={3} maxLength={5000} required value={form.instructions} onChange={e => put("instructions", e.target.value)} />
             </label>
             <label className="field full">
-              <span>Completion requirements</span>
-              <textarea
-                className="textarea"
-                minLength={3}
-                maxLength={3000}
-                required
-                value={form.completionRequirements}
-                onChange={e => put("completionRequirements", e.target.value)}
-              />
+              <span>Submission requirements</span>
+              <textarea className="textarea" minLength={3} maxLength={3000} required value={form.completionRequirements} onChange={e => put("completionRequirements", e.target.value)} placeholder="e.g. Paste your TikTok username and upload a screenshot showing you followed the account." />
             </label>
           </div>
+          <div className="check-grid">
+            <label className="checkbox-row">
+              <input type="checkbox" checked={flags.requiresEvidence} onChange={e => setFlags({ ...flags, requiresEvidence: e.target.checked })} /> Screenshot evidence required
+            </label>
+            <label className="checkbox-row">
+              <input type="checkbox" checked={flags.repeatDaily} onChange={e => setFlags({ ...flags, repeatDaily: e.target.checked })} /> Repeat daily (one submission per member per day)
+            </label>
+            <label className="checkbox-row">
+              <input type="checkbox" checked={flags.featured} onChange={e => setFlags({ ...flags, featured: e.target.checked })} /> Feature at the top
+            </label>
+          </div>
+          {form.completionMode === "quiz" && (
+            <div className="quiz-builder">
+              <div className="section-line">
+                <b>Quiz questions</b>
+                <span className="field-inline">
+                  Pass mark %
+                  <input className="input input-small" type="number" min={1} max={100} value={form.passMark} onChange={e => put("passMark", e.target.value)} />
+                </span>
+              </div>
+              <label className="checkbox-row">
+                <input type="checkbox" checked={flags.autoApproveQuiz} onChange={e => setFlags({ ...flags, autoApproveQuiz: e.target.checked })} /> Auto-approve and pay members who reach the pass mark
+              </label>
+              {quiz.map((q, qi) => (
+                <div className="quiz-builder-q" key={qi}>
+                  <input className="input" placeholder={`Question ${qi + 1}`} value={q.question} onChange={e => setQuiz(quiz.map((x, i) => (i === qi ? { ...x, question: e.target.value } : x)))} />
+                  {q.options.map((o, oi) => (
+                    <label className="quiz-builder-option" key={oi}>
+                      <input type="radio" name={`ans-${initial?.id ?? "new"}-${qi}`} checked={q.answerIndex === oi} onChange={() => setQuiz(quiz.map((x, i) => (i === qi ? { ...x, answerIndex: oi } : x)))} title="Correct answer" />
+                      <input className="input" placeholder={`Option ${oi + 1}`} value={o} onChange={e => setQuiz(quiz.map((x, i) => (i === qi ? { ...x, options: x.options.map((y, j) => (j === oi ? e.target.value : y)) } : x)))} />
+                    </label>
+                  ))}
+                  <div className="button-row">
+                    {q.options.length < 6 && (
+                      <button type="button" className="button-app secondary" onClick={() => setQuiz(quiz.map((x, i) => (i === qi ? { ...x, options: [...x.options, ""] } : x)))}>
+                        + Option
+                      </button>
+                    )}
+                    {quiz.length > 1 && (
+                      <button type="button" className="button-app danger" onClick={() => setQuiz(quiz.filter((_, i) => i !== qi))}>
+                        Remove question
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              <button type="button" className="button-app secondary" onClick={() => setQuiz([...quiz, { question: "", options: ["", ""], answerIndex: 0 }])}>
+                + Add question
+              </button>
+              <p className="small-muted">Select the radio button next to the correct answer. Members never see the answers.</p>
+            </div>
+          )}
           <div className="button-row">
             <button className="button-app" disabled={createBusy || updateBusy}>
-              {initial?.id ? "Save task changes" : "Create task"}{" "}
-              <Check size={14} />
+              {initial?.id ? "Save task changes" : "Create task"} <Check size={14} />
             </button>
           </div>
         </form>
@@ -1451,7 +1565,7 @@ function TaskReviewCard({
     <article className="surface surface-pad review-card">
       <div className="section-line">
         <div>
-          <p className="page-eyebrow">{row.taskTitle ?? `Task #${s.taskId}`}</p>
+          <p className="page-eyebrow">{row.category ? `${categoryLabel(row.category)} · ` : ""}{row.taskTitle ?? `Task #${s.taskId}`}</p>
           <h2>{row.memberName ?? "Member"}</h2>
           <small className="muted">
             {row.memberEmail} · Submitted{" "}
@@ -1462,7 +1576,9 @@ function TaskReviewCard({
       </div>
       <div className="submission-proof">
         <b>Member proof</b>
-        <p>{s.proofText}</p>
+        {s.quizScore !== null && s.quizScore !== undefined && <p><b>Quiz score: {s.quizScore}%</b></p>}
+        <p>{s.proofText ?? "—"}</p>
+        {s.periodKey && s.periodKey !== "once" && <small className="muted">Daily task · {s.periodKey}</small>}
         {row.evidenceUrl && (
           <a
             href={row.evidenceUrl}
@@ -1485,20 +1601,20 @@ function TaskReviewCard({
         />
       </label>
       <div className="button-row">
-        <button
-          className="button-app"
-          disabled={busy}
-          onClick={() => onReview("approved", note || undefined)}
-        >
-          Approve & credit {formatKes(s.rewardMinor)}
-        </button>
-        <button
-          className="button-app danger"
-          disabled={busy || !note.trim()}
-          onClick={() => onReview("rejected", note)}
-        >
-          Reject with reason
-        </button>
+        {s.status === "pending" ? (
+          <>
+            <button className="button-app" disabled={busy} onClick={() => onReview("approved", note || undefined)}>
+              Approve & credit {formatKes(s.rewardMinor)}
+            </button>
+            <button className="button-app danger" disabled={busy || !note.trim()} onClick={() => onReview("rejected", note)}>
+              Reject with reason
+            </button>
+          </>
+        ) : (
+          <span className="muted">
+            <Badge value={s.status} /> {s.reviewNote}
+          </span>
+        )}
       </div>
     </article>
   );
@@ -1571,7 +1687,7 @@ function WhatsAppReviewCard({
       </div>
       <div className="field-grid" style={{ marginTop: 12 }}>
         <label className="field">
-          <span>Administrator-approved eligible views</span>
+          <span>Approved views (member reported {s.reportedViews.toLocaleString()})</span>
           <input
             className="input"
             type="number"
@@ -1597,7 +1713,7 @@ function WhatsAppReviewCard({
           disabled={busy || Number(views) > s.reportedViews}
           onClick={() => onReview("approved", Number(views), note || undefined)}
         >
-          Approve & credit calculated reward
+          Approve {Number(views || 0).toLocaleString()} views · ≈ {formatKes(Math.min(Number(views || 0), campaign?.maximumPayableViews ?? 0) * (campaign?.rateMinor ?? 0))}
         </button>
         <button
           className="button-app danger"
@@ -1611,19 +1727,11 @@ function WhatsAppReviewCard({
   );
 }
 
-function AdminWithdrawal({
-  row,
-  onUpdate,
-  busy,
-}: {
-  row: any;
-  onUpdate: (v: any) => void;
-  busy: boolean;
-}) {
+function AdminWithdrawal({ row, b2c, onPay, onReject, onFail, busy }: { row: any; b2c: boolean; onPay: () => void; onReject: (note: string) => void; onFail: (note: string) => void; busy: boolean }) {
   const w = row.withdrawal;
   const [note, setNote] = useState("");
-  const action = (decision: "processing" | "rejected") =>
-    onUpdate({ id: w.id, decision, note: note || undefined });
+  const canPay = w.status === "pending" || w.status === "payout_failed";
+  const canReject = w.status === "pending" || w.status === "payout_failed" || (w.status === "processing" && !w.conversationId);
   return (
     <article className="surface surface-pad review-card">
       <div className="section-line">
@@ -1633,7 +1741,7 @@ function AdminWithdrawal({
           </p>
           <h2>{row.userName ?? "Member"}</h2>
           <small className="muted">
-            {row.email} · {w.mpesaPhone}
+            {row.email} · M-Pesa {w.mpesaPhone}
           </small>
         </div>
         <Badge value={w.status} />
@@ -1648,48 +1756,49 @@ function AdminWithdrawal({
           <b>{formatKes(w.feeMinor)}</b>
         </span>
         <span>
-          <small>Net payout if processed</small>
+          <small>Payout</small>
           <b>{formatKes(w.payoutMinor)}</b>
         </span>
       </div>
-      <div className="notice">
-        <ShieldCheck size={16} />
-        <span>
-          <strong>Paid status is locked</strong>
-          No payout provider callback is configured. A staff-entered receipt or
-          checkbox must not mark funds as paid.
-        </span>
-      </div>
+      {(w.payoutResultDesc || w.payoutReference) && (
+        <p className="small-muted">
+          {w.payoutReference ? <b>M-Pesa receipt {w.payoutReference}. </b> : null}
+          {w.payoutResultDesc}
+        </p>
+      )}
+      {!b2c && canPay && (
+        <div className="notice">
+          <ShieldCheck size={16} />
+          <span>
+            <strong>M-Pesa B2C is not configured</strong>Add the B2C credentials on the server to send payouts. Paid is set only by Safaricom's confirmation, never manually.
+          </span>
+        </div>
+      )}
       <label className="field">
-        <span>Administrator note (required to reject)</span>
-        <textarea
-          className="textarea"
-          maxLength={2000}
-          value={note}
-          onChange={e => setNote(e.target.value)}
-          placeholder="Record processing details or explain a rejection."
-        />
+        <span>Note (required to reject or mark failed)</span>
+        <input className="input" maxLength={2000} value={note} onChange={e => setNote(e.target.value)} placeholder="Reason shown to the member when rejecting" />
       </label>
       <div className="button-row">
-        {w.status === "pending" && (
+        {canPay && (
           <button
-            className="button-app secondary"
-            disabled={busy}
-            onClick={() => action("processing")}
+            className="button-app"
+            disabled={busy || !b2c}
+            onClick={() => {
+              if (window.confirm(`Send ${formatKes(w.payoutMinor)} to ${w.mpesaPhone} via M-Pesa?`)) onPay();
+            }}
           >
-            Mark processing
+            {w.status === "payout_failed" ? "Retry M-Pesa payout" : "Approve & send to M-Pesa"}
           </button>
         )}
-        { ["pending", "processing"].includes(w.status) && (
-          <>
-            <button
-              className="button-app danger"
-              disabled={busy || !note.trim()}
-              onClick={() => action("rejected")}
-            >
-              Reject & release funds
-            </button>
-          </>
+        {canReject && (
+          <button className="button-app danger" disabled={busy || note.trim().length < 3} onClick={() => onReject(note)}>
+            Reject & return funds
+          </button>
+        )}
+        {w.status === "processing" && w.conversationId && (
+          <button className="button-app secondary" disabled={busy || note.trim().length < 5} onClick={() => onFail(note)} title="Only after confirming in the M-Pesa portal that no payment was made">
+            Mark payout failed (after checking M-Pesa portal)
+          </button>
         )}
       </div>
     </article>
@@ -1771,18 +1880,19 @@ function ReviewCard({
       <div className="section-line">
         <div>
           <p className="page-eyebrow">
-            {row.county ?? "Kenya"} · {date(row.submittedAt)}
+            {row.showCounty && row.county ? `${row.county} (shown)` : "County hidden"} · {date(row.submittedAt)}
           </p>
           <h2>
-            {row.name} · {row.rating}/5
+            {row.displayName} · {"★".repeat(row.rating)}
           </h2>
           <small className="muted">
-            Account #{row.userId} · {row.email}
+            Account: {row.accountName} · {row.email} (private)
           </small>
         </div>
-        <Badge value={row.status} />
+        <Badge value={row.deletedAt ? "removed" : row.status} />
       </div>
       <p className="review-quote">“{row.content}”</p>
+      {row.reviewNote && <p className="small-muted">Note: {row.reviewNote}</p>}
       <label className="field">
         <span>Moderator note</span>
         <input
@@ -1884,7 +1994,7 @@ function SettingsForm({
           form={form}
           put={put}
           k="referralCommissionKes"
-          label="Referral commission (KES)"
+          label="Referral commission per activated referral (KES)"
         />
         <SettingsField
           form={form}
@@ -1910,8 +2020,24 @@ function SettingsForm({
           k="maximumCampaignParticipants"
           label="Maximum participants per campaign"
         />
+        <label className="field">
+          <span>Support email (shown on homepage)</span>
+          <input className="input" type="email" value={form.supportEmail} onChange={e => put("supportEmail", e.target.value)} />
+        </label>
+        <label className="field">
+          <span>Support phone</span>
+          <input className="input" value={form.supportPhone} onChange={e => put("supportPhone", e.target.value)} placeholder="+254…" />
+        </label>
+        <label className="field">
+          <span>Support WhatsApp number</span>
+          <input className="input" value={form.supportWhatsapp} onChange={e => put("supportWhatsapp", e.target.value)} placeholder="2547…" />
+        </label>
+        <label className="field">
+          <span>Support hours</span>
+          <input className="input" value={form.supportHours} onChange={e => put("supportHours", e.target.value)} placeholder="Mon–Sat, 8am–6pm" />
+        </label>
         <label className="field full">
-          <span>Platform announcement</span>
+          <span>Banner announcement (top of every member page)</span>
           <textarea
             className="textarea"
             maxLength={1000}
@@ -1922,8 +2048,8 @@ function SettingsForm({
         </label>
       </div>
       <p className="small-muted">
-        Activation fee may not be set below KES 100. Ensure limits and fees are
-        clearly communicated before operational use.
+        Referral commission is paid once when a referred member activates. Keep
+        fees and limits clear to members.
       </p>
       <button className="button-app" disabled={busy}>
         {busy ? "Saving…" : "Save server-side platform settings"}

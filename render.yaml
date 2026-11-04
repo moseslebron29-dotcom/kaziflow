@@ -1,0 +1,64 @@
+# Render Blueprint for KaziFlow. Secrets marked sync: false are entered in the Render dashboard.
+databases:
+  - name: kaziflow-db
+    plan: basic-256mb
+    databaseName: kaziflow
+    user: kaziflow
+
+services:
+  - type: web
+    name: kaziflow
+    runtime: node
+    plan: starter
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    disk:
+      name: kaziflow-uploads
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kaziflow-db
+          property: connectionString
+      - key: KAZIFLOW_SESSION_SECRET
+        generateValue: true
+      - key: DARAJA_CALLBACK_TOKEN
+        generateValue: true
+      - key: UPLOAD_DIR
+        value: /var/data/uploads
+      - key: ADMIN_EMAIL
+        value: moseslebron29@gmail.com
+      - key: KAZIFLOW_PUBLIC_ORIGIN
+        sync: false
+      - key: KAZIFLOW_ADMIN_BOOTSTRAP_TOKEN
+        sync: false
+      - key: KAZIFLOW_BREVO_API_KEY
+        sync: false
+      - key: KAZIFLOW_EMAIL_FROM
+        sync: false
+      - key: DARAJA_ENVIRONMENT
+        value: sandbox
+      - key: DARAJA_CONSUMER_KEY
+        sync: false
+      - key: DARAJA_CONSUMER_SECRET
+        sync: false
+      - key: DARAJA_SHORTCODE
+        sync: false
+      - key: DARAJA_PASSKEY
+        sync: false
+      - key: DARAJA_CALLBACK_URL
+        sync: false
+      - key: KAZIFLOW_LIVE_PAYMENTS_ENABLED
+        value: "false"
+      - key: DARAJA_B2C_SHORTCODE
+        sync: false
+      - key: DARAJA_B2C_INITIATOR_NAME
+        sync: false
+      - key: DARAJA_B2C_SECURITY_CREDENTIAL
+        sync: false

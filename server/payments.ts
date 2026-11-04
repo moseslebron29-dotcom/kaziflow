@@ -10,6 +10,7 @@ import {
 import { getDb } from "./db";
 import { normalizeKenyanPhone, parseStkCallback, queryStkPush } from "./daraja";
 import { applyCredit } from "./ledger";
+import { notify, templates } from "./mailer";
 
 async function requireReview(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
@@ -172,6 +173,7 @@ export async function processDarajaCallback(body: unknown) {
   }
 
   let settled = false;
+  let activatedUser: { id: number; email: string | null; name: string | null } | null = null;
   await db.transaction(async tx => {
     const lockedRows = await tx
       .select()
@@ -222,6 +224,7 @@ export async function processDarajaCallback(body: unknown) {
         .where(
           and(eq(users.id, account.id), sql`${users.activatedAt} IS NULL`)
         );
+      activatedUser = { id: account.id, email: account.email, name: account.name };
       const referralRows = await tx
         .select()
         .from(referrals)
@@ -333,6 +336,9 @@ export async function processDarajaCallback(body: unknown) {
       });
     settled = true;
   });
+  const done = activatedUser as { id: number; email: string | null; name: string | null } | null;
+  if (settled && done?.email)
+    notify({ to: done.email, userId: done.id, ...templates.activation(done.name ?? "", callback.receipt) });
   return {
     accepted: true,
     reason: settled

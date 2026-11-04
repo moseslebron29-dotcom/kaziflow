@@ -34,10 +34,18 @@ import {
   Users,
   WalletCards,
   X,
+  Star,
+  MailCheck,
+  Loader2,
+  CalendarClock,
+  ArrowUpRight,
+  Menu,
 } from "lucide-react";
 import { Wordmark } from "../components/Brand";
 import { trpc } from "../lib/trpc";
 import { formatKes } from "../lib/format";
+import { TASK_CATEGORIES, TASK_GROUPS, categoryLabel } from "@shared/taskCategories";
+import { KENYA_COUNTIES } from "@shared/counties";
 
 type User = {
   id: number;
@@ -51,29 +59,19 @@ type User = {
   activatedAt?: Date | null;
   referralCode: string | null;
   emailVerifiedAt?: Date | null;
+  marketingOptIn?: boolean;
 };
-const categories = [
-  { key: "all", label: "All tasks" },
-  { key: "survey", label: "Surveys" },
-  { key: "video", label: "Video" },
-  { key: "social", label: "Social" },
-  { key: "website", label: "Web visits" },
-  { key: "microtask", label: "Microtasks" },
-  { key: "chat", label: "Chat & earn" },
-  { key: "writing", label: "Writing" },
-  { key: "daily", label: "Daily" },
-  { key: "promotion", label: "Promotions" },
-] as const;
 const navItems = [
-  { href: "/dashboard", label: "Overview", icon: Home },
-  { href: "/tasks", label: "Available tasks", icon: BriefcaseBusiness },
-  { href: "/whatsapp-ads", label: "WhatsApp Status Ads", icon: Eye },
-  { href: "/submissions", label: "My submissions", icon: FileCheck2 },
-  { href: "/wallet", label: "Wallet & earnings", icon: WalletCards },
+  { href: "/dashboard", label: "Dashboard", icon: Home },
+  { href: "/tasks", label: "Tasks", icon: BriefcaseBusiness },
+  { href: "/whatsapp-ads", label: "WhatsApp Ads", icon: Eye },
+  { href: "/submissions", label: "My Submissions", icon: FileCheck2 },
+  { href: "/earnings", label: "Earnings", icon: HandCoins },
+  { href: "/wallet", label: "Wallet", icon: WalletCards },
   { href: "/withdraw", label: "Withdraw", icon: ArrowDownToLine },
   { href: "/referrals", label: "Referrals", icon: Users },
-  { href: "/history", label: "Transaction history", icon: History },
-  { href: "/reviews", label: "Member review", icon: BadgeCheck },
+  { href: "/history", label: "Transaction History", icon: History },
+  { href: "/reviews", label: "Reviews", icon: Star },
   { href: "/profile", label: "Profile", icon: UserRound },
   { href: "/support", label: "Support", icon: CircleHelp },
 ];
@@ -114,22 +112,25 @@ export default function MemberPortal({
   const tasks = trpc.member.tasks.useQuery(undefined, { retry: false });
   const appStatus = trpc.auth.status.useQuery();
   const isActive = Boolean(me.data?.activatedAt ?? user.activatedAt);
+  const isVerified = Boolean(me.data?.emailVerifiedAt ?? user.emailVerifiedAt);
   const titleMap: Record<string, string> = {
     "/dashboard": "Your work ledger",
     "/tasks": "Available tasks",
     "/whatsapp-ads": "WhatsApp Status Ads",
     "/submissions": "My submissions",
     "/earnings": "Earnings",
-    "/wallet": "Wallet & earnings",
+    "/wallet": "Wallet",
     "/withdraw": "Withdraw to M-Pesa",
     "/referrals": "Referral activity",
     "/history": "Transaction history",
     "/profile": "Account profile",
     "/support": "Support centre",
     "/activate": "Account activation",
-    "/reviews": "Member review",
+    "/reviews": "Reviews",
   };
   const currentTitle = titleMap[path] ?? "KaziFlow";
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => setMenuOpen(false), [path]);
   return (
     <div className="app-shell">
       <aside className="app-sidebar">
@@ -141,15 +142,17 @@ export default function MemberPortal({
               key={href}
               href={href}
               className={
-                path === href || (href === "/wallet" && path === "/earnings")
-                  ? "active"
-                  : ""
+                path === href ? "active" : ""
               }
             >
               <Icon />
               <span>{label}</span>
             </Link>
           ))}
+          <button type="button" className="app-nav-logout" onClick={onLogout}>
+            <LogOut />
+            <span>Logout</span>
+          </button>
         </nav>
         <div className="sidebar-spacer" />
         <Link href="/task-guidelines" className="app-nav-link">
@@ -162,7 +165,7 @@ export default function MemberPortal({
           <span>
             <b>{user.name ?? "Member"}</b>
             <small>
-              {isActive ? "Activated member" : "Activation required"}
+              {!isVerified ? "Email not verified" : isActive ? "Activated member" : "Activation required"}
             </small>
           </span>
           <button className="topbar-icon" title="Sign out" onClick={onLogout}>
@@ -174,29 +177,43 @@ export default function MemberPortal({
         <div className="app-mobile-head">
           <Wordmark />
           <div className="button-row">
-            <button
-              className="topbar-icon"
-              onClick={onToggleTheme}
-              aria-label="Toggle theme"
-            >
+            <button className="topbar-icon" onClick={onToggleTheme} aria-label="Toggle theme">
               <Moon size={15} />
             </button>
-            <button
-              className="topbar-icon"
-              onClick={onLogout}
-              aria-label="Sign out"
-            >
-              <LogOut size={15} />
+            <button className="topbar-icon" onClick={() => setMenuOpen(true)} aria-label="Open menu" aria-expanded={menuOpen}>
+              <Menu size={16} />
             </button>
           </div>
         </div>
+        {menuOpen && (
+          <div className="mobile-menu-backdrop" onClick={() => setMenuOpen(false)}>
+            <nav className="mobile-menu" aria-label="Member menu" onClick={e => e.stopPropagation()}>
+              <div className="section-line">
+                <b>{user.name ?? "Member"}</b>
+                <button className="topbar-icon" onClick={() => setMenuOpen(false)} aria-label="Close menu">
+                  <X size={16} />
+                </button>
+              </div>
+              {navItems.map(({ href, label, icon: Icon }) => (
+                <Link key={href} href={href} className={path === href ? "active" : ""}>
+                  <Icon size={17} />
+                  <span>{label}</span>
+                </Link>
+              ))}
+              <button type="button" className="app-nav-logout" onClick={onLogout}>
+                <LogOut />
+                <span>Logout</span>
+              </button>
+            </nav>
+          </div>
+        )}
         <header className="app-topbar">
           <span className="app-topbar-title">
             Member workspace / {currentTitle}
           </span>
           <div className="app-topbar-actions">
             <span className={`badge ${isActive ? "active" : "pending"}`}>
-              {isActive ? "Activated" : "Activation needed"}
+              {!isVerified ? "Verify email" : isActive ? "Activated" : "Activation needed"}
             </span>
             <button
               className="topbar-icon"
@@ -215,34 +232,23 @@ export default function MemberPortal({
             </div>
           )}
           {path === "/dashboard" && (
-            <Dashboard
-              user={user}
-              wallet={wallet.data}
-              tasks={tasks.data ?? []}
-              isActive={isActive}
-            />
+            <>
+              <Dashboard user={user} wallet={wallet.data} tasks={tasks.data ?? []} isActive={isActive} isVerified={isVerified} />
+              <AnnouncementPopup />
+            </>
           )}
-          {path === "/tasks" && <TaskBoard isActive={isActive} />}
+          {path === "/tasks" && <TaskBoard isActive={isActive} isVerified={isVerified} />}
           {path === "/whatsapp-ads" && <WhatsAppAds isActive={isActive} />}
           {path === "/submissions" && <Submissions />}
-          {(path === "/wallet" || path === "/earnings") && (
-            <WalletPage wallet={wallet.data} isActive={isActive} />
-          )}
-          {path === "/withdraw" && (
-            <WithdrawPage
-              user={user}
-              wallet={wallet.data}
-              isActive={isActive}
-            />
-          )}
+          {path === "/wallet" && <WalletPage wallet={wallet.data} isActive={isActive} />}
+          {path === "/earnings" && <EarningsPage wallet={wallet.data} />}
+          {path === "/withdraw" && <WithdrawPage user={me.data ?? user} wallet={wallet.data} isActive={isActive} isVerified={isVerified} />}
           {path === "/referrals" && <Referrals />}
           {path === "/history" && <HistoryPage />}
           {path === "/profile" && <Profile user={me.data ?? user} />}
           {path === "/support" && <SupportPage />}
-          {path === "/activate" && (
-            <ActivationPage isActive={isActive} user={me.data ?? user} />
-          )}
-          {path === "/reviews" && <MemberReview />}
+          {path === "/activate" && <ActivationPage isActive={isActive} isVerified={isVerified} user={me.data ?? user} />}
+          {path === "/reviews" && <MemberReview user={me.data ?? user} />}
           {!titleMap[path] && (
             <div className="empty-state">
               <CircleHelp />
@@ -260,7 +266,7 @@ export default function MemberPortal({
               "/tasks",
               "/whatsapp-ads",
               "/wallet",
-              "/profile",
+              "/submissions",
             ].includes(item.href)
           )
           .map(({ href, label, icon: Icon }) => (
@@ -277,10 +283,16 @@ export default function MemberPortal({
                     ? "Home"
                     : href === "/wallet"
                       ? "Wallet"
-                      : label}
+                      : href === "/submissions"
+                        ? "Submissions"
+                        : label}
               </span>
             </Link>
           ))}
+        <button type="button" className="bottom-more" onClick={() => setMenuOpen(true)}>
+          <Menu />
+          <span>More</span>
+        </button>
       </nav>
     </div>
   );
@@ -384,16 +396,91 @@ function ActivationPrompt({ isActive }: { isActive: boolean }) {
   ) : null;
 }
 
+function VerifyPrompt({ isVerified }: { isVerified: boolean }) {
+  return !isVerified ? (
+    <div className="notice notice-warn">
+      <MailCheck size={17} />
+      <span>
+        <strong>Verify your email to continue</strong>We sent a six-digit code to your email. Verification is required before activation, tasks and withdrawals.
+        <Link href="/verify-email" className="notice-link">
+          {" "}
+          Enter code
+        </Link>
+      </span>
+    </div>
+  ) : null;
+}
+
+/** Dismissible announcement popup shown on the dashboard only, never during payments or submissions. */
+function AnnouncementPopup() {
+  const next = trpc.announcements.next.useQuery(undefined, { staleTime: 60_000, retry: false });
+  const seen = trpc.announcements.seen.useMutation();
+  const dismiss = trpc.announcements.dismiss.useMutation();
+  const clicked = trpc.announcements.clicked.useMutation();
+  const [closedId, setClosedId] = useState<number | null>(null);
+  const item = next.data;
+  useEffect(() => {
+    if (item) seen.mutate({ id: item.id });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item?.id]);
+  if (!item || closedId === item.id) return null;
+  const close = () => {
+    setClosedId(item.id);
+    dismiss.mutate({ id: item.id });
+  };
+  return (
+    <div className="modal-backdrop announce-backdrop" role="dialog" aria-modal="true" aria-labelledby="announce-title" onClick={close}>
+      <div className="announce-card" onClick={e => e.stopPropagation()}>
+        <button className="topbar-icon announce-close" onClick={close} aria-label="Close announcement">
+          <X size={16} />
+        </button>
+        {item.mediaUrl &&
+          (item.mediaType === "video" ? (
+            <video className="announce-media" src={item.mediaUrl} controls autoPlay muted playsInline />
+          ) : (
+            <img className="announce-media" src={item.mediaUrl} alt="" />
+          ))}
+        <div className="announce-body">
+          <p className="page-eyebrow">KaziFlow update</p>
+          <h2 id="announce-title">{item.title}</h2>
+          <p style={{ whiteSpace: "pre-line" }}>{item.body}</p>
+          <div className="button-row">
+            {item.linkUrl && (
+              <a
+                className="button-app"
+                href={item.linkUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                onClick={() => {
+                  clicked.mutate({ id: item.id });
+                  setClosedId(item.id);
+                }}
+              >
+                {item.linkLabel || "Learn more"} <ArrowUpRight size={14} />
+              </a>
+            )}
+            <button className="button-app secondary" onClick={close}>
+              Got it
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Dashboard({
   user,
   wallet,
   tasks,
   isActive,
+  isVerified,
 }: {
   user: User;
   wallet: any;
   tasks: any[];
   isActive: boolean;
+  isVerified: boolean;
 }) {
   const submissions = trpc.member.mySubmissions.useQuery();
   const ads = trpc.member.whatsappCampaigns.useQuery(undefined, {
@@ -402,7 +489,7 @@ function Dashboard({
   return (
     <>
       <Intro
-        eyebrow="Account overview"
+        eyebrow="Dashboard"
         title={`Good to see you, ${(user.name ?? "member").split(" ")[0]}.`}
         description="Your task activity and wallet balances are shown from the records attached to your account."
         action={
@@ -411,8 +498,15 @@ function Dashboard({
           </Link>
         }
       />
-      <ActivationPrompt isActive={isActive} />
+      <VerifyPrompt isVerified={isVerified} />
+      {isVerified && <ActivationPrompt isActive={isActive} />}
       <div className="dashboard-grid">
+        <Metric
+          label="Total earnings"
+          value={formatKes(wallet?.lifetimeMinor ?? 0)}
+          foot="Approved credits only"
+          icon={HandCoins}
+        />
         <Metric
           label="Available balance"
           value={formatKes(wallet?.availableMinor ?? 0)}
@@ -424,12 +518,6 @@ function Dashboard({
           value={formatKes(wallet?.pendingMinor ?? 0)}
           foot="Awaiting review"
           icon={Clock3}
-        />
-        <Metric
-          label="Lifetime earnings"
-          value={formatKes(wallet?.lifetimeMinor ?? 0)}
-          foot="Approved credits only"
-          icon={HandCoins}
         />
         <Metric
           label="Referral earnings"
@@ -450,16 +538,16 @@ function Dashboard({
           icon={FileCheck2}
         />
         <Metric
-          label="Active task listings"
-          value={String(tasks.length)}
+          label="Available tasks"
+          value={String(wallet?.availableTasks ?? tasks.length)}
           foot="Availability may change"
           icon={BriefcaseBusiness}
         />
         <Metric
-          label="Account status"
-          value={isActive ? "Activated" : "Not activated"}
+          label="Activation status"
+          value={!isVerified ? "Verify email" : isActive ? "Activated" : "Not activated"}
           foot={
-            isActive ? "Provider-confirmed fee" : "KES 100 one-time activation"
+            isActive ? "Confirmed by M-Pesa" : "KES 100 one-time activation"
           }
           icon={ShieldCheck}
         />
@@ -484,13 +572,13 @@ function Dashboard({
           </div>
         </section>
         <section className="surface surface-pad">
-          <h2 className="surface-title">Recent activity</h2>
+          <h2 className="surface-title">Recent transactions</h2>
           {(wallet?.recentTransactions?.length ?? 0) > 0 ? (
             <div className="activity-list">
               {wallet.recentTransactions.slice(0, 4).map((row: any) => (
                 <div className="activity-row" key={row.id}>
                   <span>
-                    <b>{row.note ?? row.kind.replaceAll("_", " ")}</b>
+                    <b>{ledgerLabel[row.kind] ?? row.kind.replaceAll("_", " ")}</b>
                     <small>{formatDate(row.createdAt)}</small>
                   </span>
                   <strong>
@@ -551,6 +639,7 @@ function Dashboard({
 type TaskRow = {
   id: number;
   category: string;
+  group: string;
   title: string;
   description: string;
   instructions: string;
@@ -559,17 +648,70 @@ type TaskRow = {
   estimatedMinutes: number;
   slotLimit: number;
   slotsTaken: number;
+  slotsLeft: number;
   completionMode: string;
   externalUrl: string | null;
-  status: string;
-  budgetMinor: number;
-  spentMinor: number;
+  requiresEvidence: boolean;
+  repeatDaily: boolean;
+  sponsorName: string | null;
+  featured: boolean;
+  expiresAt: Date | string | null;
+  quiz: { question: string; options: string[] }[];
+  myStatus: null | "pending" | "approved" | "rejected";
 };
-function TaskBoard({ isActive }: { isActive: boolean }) {
-  const [category, setCategory] = useState("all");
-  const [attempt, setAttempt] = useState<any>(null);
+const navigate = (to: string) => {
+  window.history.pushState({}, "", to);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+};
+export function TaskCard({ task, cta, onStart, disabled }: { task: TaskRow; cta: string; onStart: () => void; disabled?: boolean }) {
+  const done = task.myStatus === "approved" || task.myStatus === "pending";
+  return (
+    <article className={`task-card${task.featured ? " task-card-featured" : ""}`}>
+      <div className="task-meta">
+        <span className="badge">{categoryLabel(task.category)}</span>
+        {task.featured && <span className="badge active">Featured</span>}
+        {task.repeatDaily && <span className="badge processing">Daily</span>}
+        {task.myStatus && <Badge value={task.myStatus} />}
+      </div>
+      <h3>{task.title}</h3>
+      {task.sponsorName && <p className="small-muted">Sponsored by {task.sponsorName}</p>}
+      <p>{task.description}</p>
+      <div className="task-meta">
+        <span>
+          <Clock3 size={13} /> {task.estimatedMinutes} min
+        </span>
+        <span>
+          <Users size={13} /> {task.slotsLeft} slots left
+        </span>
+        <span>
+          <FileCheck2 size={13} /> {task.completionMode === "quiz" ? `${task.quiz.length} questions` : task.requiresEvidence ? "Screenshot needed" : "Written proof"}
+        </span>
+        {task.expiresAt && (
+          <span>
+            <CalendarClock size={13} /> Ends {formatDate(task.expiresAt)}
+          </span>
+        )}
+      </div>
+      <div className="task-requirements">
+        <b>Submission requirements</b>
+        <p>{task.completionRequirements}</p>
+      </div>
+      <div className="task-card-foot">
+        <strong className="task-reward">{formatKes(task.rewardMinor)}</strong>
+        <button className="button-app" disabled={disabled || done || task.slotsLeft <= 0} onClick={onStart}>
+          {done ? (task.myStatus === "approved" ? "Completed" : "Under review") : cta} <ArrowRight size={14} />
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function TaskBoard({ isActive, isVerified }: { isActive: boolean; isVerified: boolean }) {
+  const [group, setGroup] = useState<string>("all");
+  const [category, setCategory] = useState<string>("all");
+  const [attempt, setAttempt] = useState<{ task: TaskRow; attemptId: number; startedAt: string } | null>(null);
   const query = trpc.member.tasks.useQuery(
-    category === "all" ? undefined : { category: category as any }
+    category !== "all" ? { category: category as any } : group !== "all" ? { group: group as any } : undefined
   );
   const start = trpc.member.startTask.useMutation();
   const submit = trpc.member.submitTask.useMutation();
@@ -577,42 +719,34 @@ function TaskBoard({ isActive }: { isActive: boolean }) {
   const utils = trpc.useUtils();
   const [proof, setProof] = useState("");
   const [evidence, setEvidence] = useState<File | null>(null);
+  const [answers, setAnswers] = useState<number[]>([]);
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     if (!attempt) return;
-    const timer = setInterval(
-      () =>
-        setElapsed(
-          Math.floor(
-            (Date.now() - new Date(attempt.startedAt).getTime()) / 1000
-          )
-        ),
-      1000
-    );
+    const tick = () => setElapsed(Math.floor((Date.now() - new Date(attempt.startedAt).getTime()) / 1000));
+    tick();
+    const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
   }, [attempt]);
   const begin = async (task: TaskRow) => {
+    if (!isVerified) {
+      toast.info("Verify your email first.");
+      navigate("/verify-email");
+      return;
+    }
     if (!isActive) {
-      toast.info("Complete activation before starting a task.");
-      window.history.pushState({}, "", "/activate");
-      window.dispatchEvent(new PopStateEvent("popstate"));
+      toast.info("Activate your account (one-time KES 100) to start tasks.");
+      navigate("/activate");
       return;
     }
     try {
       const result = await start.mutateAsync({ taskId: task.id });
-      if (result.needsActivation) {
-        window.history.pushState({}, "", "/activate");
-        window.dispatchEvent(new PopStateEvent("popstate"));
-        return;
-      }
-      setAttempt({
-        task: result.task,
-        attemptId: result.attemptId,
-        startedAt: result.startedAt,
-      });
+      if (result.needsVerification) return navigate("/verify-email");
+      if (result.needsActivation) return navigate("/activate");
+      setAttempt({ task: result.task as unknown as TaskRow, attemptId: result.attemptId!, startedAt: result.startedAt! });
       setProof("");
       setEvidence(null);
-      setElapsed(0);
+      setAnswers([]);
     } catch (error) {
       toast.error(errorText(error));
     }
@@ -622,50 +756,54 @@ function TaskBoard({ isActive }: { isActive: boolean }) {
     if (!attempt) return;
     try {
       let evidenceAssetId: number | undefined;
-      if (evidence)
-        evidenceAssetId = (
-          await upload.mutateAsync({
-            mime: evidence.type as any,
-            base64: await toBase64(evidence),
-          })
-        ).assetId;
-      await submit.mutateAsync({
+      if (evidence) evidenceAssetId = (await upload.mutateAsync({ mime: evidence.type as any, base64: await toBase64(evidence) })).assetId;
+      const result = await submit.mutateAsync({
         taskId: attempt.task.id,
         attemptId: attempt.attemptId,
         proofText: proof,
         evidenceAssetId,
+        quizAnswers: attempt.task.completionMode === "quiz" ? answers : undefined,
       });
-      toast.success("Task submitted for review.");
+      if (result.status === "approved") toast.success(result.message);
+      else toast.success(result.quizScore !== null ? `Submitted. Your score: ${result.quizScore}%. Awaiting review.` : result.message);
       setAttempt(null);
-      await Promise.all([
-        utils.member.mySubmissions.invalidate(),
-        utils.member.wallet.invalidate(),
-        utils.member.tasks.invalidate(),
-      ]);
+      await Promise.all([utils.member.mySubmissions.invalidate(), utils.member.wallet.invalidate(), utils.member.tasks.invalidate()]);
     } catch (error) {
       toast.error(errorText(error));
     }
   };
-  const remaining = attempt
-    ? Math.max(0, attempt.task.estimatedMinutes * 60 - elapsed)
-    : 0;
+  const minimumSeconds = attempt ? (attempt.task.completionMode === "video_progress" ? attempt.task.estimatedMinutes * 60 : Math.ceil(attempt.task.estimatedMinutes * 30)) : 0;
+  const remaining = Math.max(0, minimumSeconds - elapsed);
+  const groupCats = TASK_CATEGORIES.filter(c => group === "all" || c.group === group);
+  const quizReady = !attempt || attempt.task.completionMode !== "quiz" || (answers.length === attempt.task.quiz.length && answers.every(a => a !== undefined));
   return (
     <>
       <Intro
         eyebrow="Find a clear brief"
         title="Choose your next task."
-        description="Every listing shows its work, time estimate, review requirements, reward and remaining slots."
+        description="Every listing shows the work, time estimate, submission requirements, reward in KES and remaining slots."
       />
-      <ActivationPrompt isActive={isActive} />
+      <VerifyPrompt isVerified={isVerified} />
+      {isVerified && <ActivationPrompt isActive={isActive} />}
       <div className="filter-row" style={{ marginTop: 15 }}>
-        {categories.map(item => (
+        <button type="button" className={`filter-pill ${group === "all" ? "active" : ""}`} onClick={() => { setGroup("all"); setCategory("all"); }}>
+          All tasks
+        </button>
+        {TASK_GROUPS.map(g => (
+          <button type="button" key={g.id} className={`filter-pill ${group === g.id ? "active" : ""}`} onClick={() => { setGroup(g.id); setCategory("all"); }}>
+            {g.label}
+          </button>
+        ))}
+      </div>
+      <div className="filter-row filter-row-sub">
+        {groupCats.map(c => (
           <button
             type="button"
-            className={`filter-pill ${category === item.key ? "active" : ""}`}
-            key={item.key}
-            onClick={() => setCategory(item.key)}
+            key={c.id}
+            className={`filter-chip ${category === c.id ? "active" : ""}`}
+            onClick={() => (c.id === "whatsapp_status" ? navigate("/whatsapp-ads") : c.id === "referral" ? navigate("/referrals") : setCategory(category === c.id ? "all" : c.id))}
           >
-            {item.label}
+            {c.label}
           </button>
         ))}
       </div>
@@ -673,58 +811,15 @@ function TaskBoard({ isActive }: { isActive: boolean }) {
         <p className="muted">Loading available tasks…</p>
       ) : (query.data?.length ?? 0) === 0 ? (
         <Empty
-          title="No matching tasks right now"
-          text="Task availability is set by administrators. Check again later or browse the other categories."
+          title="No tasks in this category right now"
+          text="New tasks are published by the KaziFlow team and advertisers. Check again later or try another category."
           href="/whatsapp-ads"
           link="Browse WhatsApp Status Ads"
         />
       ) : (
         <div className="task-grid">
-          {(query.data as TaskRow[]).map(task => (
-            <article className="task-card" key={task.id}>
-              <div className="task-meta">
-                <span className="badge">
-                  {task.category.replaceAll("_", " ")}
-                </span>
-                <Badge value={task.status} />
-              </div>
-              <h3>{task.title}</h3>
-              <p>{task.description}</p>
-              <div className="task-meta">
-                <span>
-                  <Clock3 size={13} /> {task.estimatedMinutes} min
-                </span>
-                <span>
-                  <Users size={13} />{" "}
-                  {Math.max(0, task.slotLimit - task.slotsTaken)} slots
-                </span>
-                <span>
-                  <FileCheck2 size={13} />{" "}
-                  {task.completionMode.replaceAll("_", " ")}
-                </span>
-              </div>
-              <div className="task-requirements">
-                <b>Completion requirements</b>
-                <p>{task.completionRequirements}</p>
-              </div>
-              <div className="task-card-foot">
-                <strong className="task-reward">
-                  {formatKes(task.rewardMinor)}
-                </strong>
-                <button
-                  className="button-app"
-                  disabled={
-                    start.isPending ||
-                    task.slotsTaken >= task.slotLimit ||
-                    task.budgetMinor - task.spentMinor < task.rewardMinor
-                  }
-                  onClick={() => void begin(task)}
-                >
-                  {isActive ? "Start task" : "Activate to start"}{" "}
-                  <ArrowRight size={14} />
-                </button>
-              </div>
-            </article>
+          {(query.data as unknown as TaskRow[]).map(task => (
+            <TaskCard key={task.id} task={task} disabled={start.isPending} onStart={() => void begin(task)} cta={!isVerified ? "Verify to start" : isActive ? "Start task" : "Activate to start"} />
           ))}
         </div>
       )}
@@ -733,84 +828,73 @@ function TaskBoard({ isActive }: { isActive: boolean }) {
           <div className="modal-card">
             <div className="modal-head">
               <div>
-                <p className="page-eyebrow">Task {attempt.task.category}</p>
+                <p className="page-eyebrow">{categoryLabel(attempt.task.category)} · {formatKes(attempt.task.rewardMinor)}</p>
                 <h2>{attempt.task.title}</h2>
-                <p>
-                  Follow the instructions and submit original, relevant proof.
-                </p>
+                <p>Follow the instructions and submit honest, original proof.</p>
               </div>
-              <button
-                className="topbar-icon"
-                onClick={() => setAttempt(null)}
-                aria-label="Close"
-              >
+              <button className="topbar-icon" onClick={() => setAttempt(null)} aria-label="Close">
                 <X size={16} />
               </button>
             </div>
             <div className="notice">
               <Clock3 size={16} />
               <span>
-                <strong>
-                  Minimum activity time: {attempt.task.estimatedMinutes} minutes
-                </strong>
-                Time recorded since you started: {Math.floor(elapsed / 60)} min{" "}
-                {elapsed % 60} sec. The server checks elapsed time; it does not
-                independently verify external platform actions.
+                <strong>Time on task: {Math.floor(elapsed / 60)} min {elapsed % 60} sec</strong>
+                {remaining > 0 ? `You can submit in ${Math.ceil(remaining / 60)} minute(s).` : "You can submit now."} KaziFlow checks time spent; reviewers check your proof.
               </span>
             </div>
             {attempt.task.externalUrl && (
-              <a
-                className="button-app secondary"
-                target="_blank"
-                rel="noreferrer"
-                href={attempt.task.externalUrl}
-                style={{ marginTop: 14 }}
-              >
-                Open task destination <ArrowRight size={14} />
+              <a className="button-app secondary" target="_blank" rel="noreferrer noopener" href={attempt.task.externalUrl} style={{ marginTop: 14 }}>
+                Open task link <ArrowUpRight size={14} />
               </a>
             )}
             <div className="surface surface-pad" style={{ marginTop: 14 }}>
               <b>Instructions</b>
-              <p className="muted">{attempt.task.instructions}</p>
+              <p className="muted" style={{ whiteSpace: "pre-line" }}>{attempt.task.instructions}</p>
+              <b>Submission requirements</b>
+              <p className="muted" style={{ whiteSpace: "pre-line" }}>{attempt.task.completionRequirements}</p>
             </div>
-            <form
-              className="form-stack"
-              onSubmit={submitTask}
-              style={{ marginTop: 14 }}
-            >
-              <label className="field">
-                <span>What did you complete? Add the requested proof.</span>
-                <textarea
-                  className="textarea"
-                  required
-                  minLength={3}
-                  maxLength={5000}
-                  value={proof}
-                  onChange={e => setProof(e.target.value)}
-                  placeholder="Describe the completed task or enter the requested reference…"
-                />
-              </label>
-              <label className="field">
-                <span>Evidence image (optional)</span>
-                <input
-                  className="input"
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  onChange={e => setEvidence(e.target.files?.[0] ?? null)}
-                />
-                <small>
-                  JPEG, PNG or WebP. Only submit evidence requested by the task.
-                </small>
-              </label>
-              <button
-                className="button-app"
-                disabled={remaining > 0 || submit.isPending || upload.isPending}
-              >
-                {remaining > 0
-                  ? `Available in ${Math.ceil(remaining / 60)} minute(s)`
-                  : submit.isPending || upload.isPending
-                    ? "Submitting…"
-                    : "Submit for review"}
+            <form className="form-stack" onSubmit={submitTask} style={{ marginTop: 14 }}>
+              {attempt.task.completionMode === "quiz" ? (
+                <div className="quiz-list">
+                  {attempt.task.quiz.map((q, qi) => (
+                    <fieldset className="quiz-question" key={qi}>
+                      <legend>
+                        {qi + 1}. {q.question}
+                      </legend>
+                      {q.options.map((option, oi) => (
+                        <label key={oi} className={`quiz-option${answers[qi] === oi ? " selected" : ""}`}>
+                          <input
+                            type="radio"
+                            name={`q-${qi}`}
+                            checked={answers[qi] === oi}
+                            onChange={() => {
+                              const next = [...answers];
+                              next[qi] = oi;
+                              setAnswers(next);
+                            }}
+                          />
+                          {option}
+                        </label>
+                      ))}
+                    </fieldset>
+                  ))}
+                </div>
+              ) : (
+                <label className="field">
+                  <span>What did you complete? Add the requested proof.</span>
+                  <textarea className="textarea" required minLength={3} maxLength={5000} value={proof} onChange={e => setProof(e.target.value)} placeholder="Describe what you did, or paste the username/link/reference the task asks for…" />
+                </label>
+              )}
+              {attempt.task.completionMode !== "quiz" || attempt.task.requiresEvidence ? (
+                <label className="field">
+                  <span>Screenshot evidence {attempt.task.requiresEvidence ? "(required)" : "(optional)"}</span>
+                  <input className="input" type="file" required={attempt.task.requiresEvidence} accept="image/jpeg,image/png,image/webp" onChange={e => setEvidence(e.target.files?.[0] ?? null)} />
+                  <small>JPEG, PNG or WebP up to 3 MB. Each screenshot can only be used once.</small>
+                </label>
+              ) : null}
+              <button className="button-app" disabled={remaining > 0 || !quizReady || submit.isPending || upload.isPending}>
+                {remaining > 0 ? `Available in ${Math.ceil(remaining / 60)} minute(s)` : submit.isPending || upload.isPending ? "Submitting…" : "Submit for review"}
               </button>
             </form>
           </div>
@@ -841,6 +925,8 @@ type Campaign = {
   durationDays: number;
   strictVerification: boolean;
   evidenceNotice: string;
+  myStatus: string | null;
+  endsAt: Date | string;
 };
 function WhatsAppAds({ isActive }: { isActive: boolean }) {
   const [selected, setSelected] = useState<Campaign | null>(null);
@@ -986,7 +1072,7 @@ function WhatsAppAds({ isActive }: { isActive: boolean }) {
                   </span>
                 </div>
                 <div className="campaign-meta">
-                  <span>{campaign.durationDays} day(s)</span>
+                  <span>Ends {formatDate(campaign.endsAt)}</span>
                   <span>
                     {Math.max(
                       0,
@@ -1015,16 +1101,20 @@ function WhatsAppAds({ isActive }: { isActive: boolean }) {
                     <ArrowDownToLine size={14} />
                   </a>
                 )}
-                <button
-                  className="button-app"
-                  disabled={
-                    !isActive ||
-                    campaign.participants >= campaign.participantLimit
-                  }
-                  onClick={() => openCampaign(campaign)}
-                >
-                  Post & submit evidence <ArrowRight size={14} />
-                </button>
+                {campaign.myStatus ? (
+                  <div className="section-line">
+                    <span className="muted">Your evidence</span>
+                    <Badge value={campaign.myStatus} />
+                  </div>
+                ) : (
+                  <button
+                    className="button-app"
+                    disabled={!isActive || campaign.participants >= campaign.participantLimit}
+                    onClick={() => openCampaign(campaign)}
+                  >
+                    Post & submit evidence <ArrowRight size={14} />
+                  </button>
+                )}
               </div>
             </article>
           ))}
@@ -1086,7 +1176,7 @@ function WhatsAppAds({ isActive }: { isActive: boolean }) {
                   />
                 </label>
                 <label className="field">
-                  <span>Self-reported status views</span>
+                  <span>Views shown on your screenshot</span>
                   <input
                     className="input"
                     type="number"
@@ -1173,6 +1263,7 @@ function Submissions() {
                       <th>Task</th>
                       <th>Category</th>
                       <th>Reward</th>
+                      <th>Score</th>
                       <th>Status</th>
                       <th>Submitted</th>
                       <th>Reviewer note</th>
@@ -1182,8 +1273,9 @@ function Submissions() {
                     {result.data.tasks.map(row => (
                       <tr key={row.id}>
                         <td>{row.title ?? `Task #${row.taskId}`}</td>
-                        <td>{row.category ?? "—"}</td>
+                        <td>{row.category ? categoryLabel(row.category) : "—"}</td>
                         <td>{formatKes(row.rewardMinor)}</td>
+                        <td>{row.quizScore !== null ? `${row.quizScore}%` : "—"}</td>
                         <td>
                           <Badge value={row.status} />
                         </td>
@@ -1210,7 +1302,8 @@ function Submissions() {
                   <thead>
                     <tr>
                       <th>Campaign</th>
-                      <th>Eligible views</th>
+                      <th>Reported views</th>
+                      <th>Approved views</th>
                       <th>Reward</th>
                       <th>Status</th>
                       <th>Submitted</th>
@@ -1221,7 +1314,8 @@ function Submissions() {
                     {result.data.whatsappAds.map(row => (
                       <tr key={row.id}>
                         <td>{row.title ?? `Campaign #${row.campaignId}`}</td>
-                        <td>{row.eligibleViews.toLocaleString()}</td>
+                        <td>{row.reportedViews.toLocaleString()}</td>
+                        <td>{row.status === "pending" ? "In review" : row.eligibleViews.toLocaleString()}</td>
                         <td>{formatKes(row.rewardMinor)}</td>
                         <td>
                           <Badge value={row.status} />
@@ -1242,13 +1336,13 @@ function Submissions() {
 }
 
 function WalletPage({ wallet, isActive }: { wallet: any; isActive: boolean }) {
-  const ledger = trpc.member.history.useQuery();
+  const history = trpc.member.history.useQuery();
   return (
     <>
       <Intro
-        eyebrow="Real ledger entries"
-        title="Wallet & earnings."
-        description="Only approved task, ad and referral credits change available balance. Pending evidence remains pending until review."
+        eyebrow="Your balances"
+        title="Wallet."
+        description="Available balance can be withdrawn to M-Pesa. Pending earnings become available only after a reviewer approves your work."
         action={
           <Link href="/withdraw" className="button-app">
             Withdraw <ArrowDownToLine size={15} />
@@ -1257,48 +1351,94 @@ function WalletPage({ wallet, isActive }: { wallet: any; isActive: boolean }) {
       />
       {!isActive && <ActivationPrompt isActive={false} />}
       <div className="dashboard-grid">
-        <Metric
-          label="Available"
-          value={formatKes(wallet?.availableMinor ?? 0)}
-          foot="Eligible to request"
-        />
-        <Metric
-          label="Pending"
-          value={formatKes(wallet?.pendingMinor ?? 0)}
-          foot="Awaiting review"
-        />
-        <Metric
-          label="Lifetime credits"
-          value={formatKes(wallet?.lifetimeMinor ?? 0)}
-          foot="Approved records"
-        />
-        <Metric
-          label="Referral credits"
-          value={formatKes(wallet?.referralEarningsMinor ?? 0)}
-          foot="Eligible activated referrals"
-        />
+        <Metric label="Available balance" value={formatKes(wallet?.availableMinor ?? 0)} foot="Ready to withdraw" icon={WalletCards} />
+        <Metric label="Pending earnings" value={formatKes(wallet?.pendingMinor ?? 0)} foot="Awaiting review" icon={Clock3} />
+        <Metric label="Withdrawals in progress" value={formatKes(wallet?.withdrawalsInProgressMinor ?? 0)} foot="Reserved for M-Pesa" icon={ArrowDownToLine} />
+        <Metric label="Paid to M-Pesa" value={formatKes(wallet?.withdrawnMinor ?? 0)} foot="Confirmed by Safaricom" icon={Check} />
       </div>
       <section className="surface surface-pad">
         <div className="section-line">
-          <h2 className="surface-title">Latest ledger entries</h2>
+          <h2 className="surface-title">Recent transactions</h2>
           <Link className="text-link" href="/history">
             Full history <ArrowRight size={14} />
           </Link>
         </div>
-        {ledger.isLoading ? (
+        {history.isLoading ? (
           <p className="muted">Loading…</p>
-        ) : !ledger.data?.length ? (
-          <Empty
-            title="No wallet activity yet"
-            text="Your wallet begins at KES 0.00. Approved credits and withdrawal holds are recorded as they happen."
-          />
+        ) : !history.data?.ledger.length ? (
+          <Empty title="No wallet activity yet" text="Your wallet starts at KES 0. Approved rewards, withdrawal holds and releases appear here as they happen." />
         ) : (
-          <LedgerTable rows={ledger.data} />
+          <LedgerTable rows={history.data.ledger.slice(0, 10)} />
         )}
       </section>
     </>
   );
 }
+
+const earningKinds: Record<string, string> = {
+  task_credit: "Task rewards",
+  ad_credit: "WhatsApp Status Ads",
+  referral_credit: "Referral commissions",
+  daily_credit: "Daily rewards",
+  adjustment: "Adjustments",
+};
+function EarningsPage({ wallet }: { wallet: any }) {
+  const history = trpc.member.history.useQuery();
+  const credits = (history.data?.ledger ?? []).filter(r => r.direction === "credit" && r.kind in earningKinds);
+  const totals = Object.keys(earningKinds).map(kind => ({
+    kind,
+    label: earningKinds[kind]!,
+    total: credits.filter(c => c.kind === kind).reduce((s, c) => s + c.amountMinor, 0),
+    count: credits.filter(c => c.kind === kind).length,
+  }));
+  return (
+    <>
+      <Intro eyebrow="Approved rewards only" title="Earnings." description="Every shilling here comes from an approved submission, campaign or referral. Nothing is estimated or pre-filled." />
+      <div className="dashboard-grid">
+        <Metric label="Total earnings" value={formatKes(wallet?.lifetimeMinor ?? 0)} foot="All approved credits" icon={HandCoins} />
+        <Metric label="Pending earnings" value={formatKes(wallet?.pendingMinor ?? 0)} foot="Awaiting review" icon={Clock3} />
+        <Metric label="Referral earnings" value={formatKes(wallet?.referralEarningsMinor ?? 0)} foot="From activated referrals" icon={Users} />
+        <Metric label="Completed tasks" value={String(wallet?.completedTasks ?? 0)} foot="Approved tasks & ads" icon={Check} />
+      </div>
+      <section className="surface surface-pad">
+        <h2 className="surface-title">Earnings by source</h2>
+        <div className="earning-bars">
+          {totals.filter(t => t.kind !== "adjustment" || t.total > 0).map(t => {
+            const pct = wallet?.lifetimeMinor ? Math.round((t.total / wallet.lifetimeMinor) * 100) : 0;
+            return (
+              <div className="earning-bar" key={t.kind}>
+                <div className="section-line">
+                  <span>{t.label}</span>
+                  <b>{formatKes(t.total)}</b>
+                </div>
+                <div className="bar-track">
+                  <span style={{ width: `${pct}%` }} />
+                </div>
+                <small className="small-muted">{t.count} credit(s)</small>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+      <section className="surface surface-pad" style={{ marginTop: 14 }}>
+        <h2 className="surface-title">Task history</h2>
+        {!credits.length ? <p className="muted">Approved rewards will be listed here.</p> : <LedgerTable rows={credits} />}
+      </section>
+    </>
+  );
+}
+
+const ledgerLabel: Record<string, string> = {
+  task_credit: "Task reward",
+  ad_credit: "WhatsApp Status reward",
+  referral_credit: "Referral commission",
+  daily_credit: "Daily reward",
+  withdrawal_hold: "Withdrawal reserved",
+  withdrawal_release: "Withdrawal returned",
+  withdrawal_paid: "Withdrawal paid",
+  withdrawal_fee: "Withdrawal fee",
+  adjustment: "Adjustment",
+};
 function LedgerTable({ rows }: { rows: any[] }) {
   return (
     <div className="table-wrap">
@@ -1306,24 +1446,20 @@ function LedgerTable({ rows }: { rows: any[] }) {
         <thead>
           <tr>
             <th>Date</th>
-            <th>Activity</th>
-            <th>Direction</th>
+            <th>Type</th>
+            <th>Details</th>
             <th>Amount</th>
-            <th>Reference</th>
           </tr>
         </thead>
         <tbody>
           {rows.map(row => (
             <tr key={row.id}>
               <td>{formatDate(row.createdAt)}</td>
-              <td>{row.note ?? row.kind.replaceAll("_", " ")}</td>
-              <td>{row.direction}</td>
-              <td className="money">
+              <td>{ledgerLabel[row.kind] ?? row.kind.replaceAll("_", " ")}</td>
+              <td>{row.note ?? `${row.referenceType} #${row.referenceId}`}</td>
+              <td className={`money ${row.direction === "credit" ? "money-in" : "money-out"}`}>
                 {row.direction === "credit" ? "+" : "−"}
                 {formatKes(row.amountMinor)}
-              </td>
-              <td>
-                {row.referenceType} #{row.referenceId}
               </td>
             </tr>
           ))}
@@ -1333,138 +1469,99 @@ function LedgerTable({ rows }: { rows: any[] }) {
   );
 }
 
-function WithdrawPage({
-  user,
-  wallet,
-  isActive,
-}: {
-  user: User;
-  wallet: any;
-  isActive: boolean;
-}) {
+function WithdrawPage({ user, wallet, isActive, isVerified }: { user: User; wallet: any; isActive: boolean; isVerified: boolean }) {
   const [amount, setAmount] = useState("");
+  const [phone, setPhone] = useState(user.mpesaPhone ? `0${user.mpesaPhone.slice(3)}` : "");
+  const [password, setPassword] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const query = trpc.member.withdrawals.useQuery();
+  const settings = trpc.member.withdrawalSettings.useQuery();
   const withdraw = trpc.member.withdraw.useMutation();
   const utils = trpc.useUtils();
+  const phoneChanged = Boolean(phone) && toIntl(phone) !== user.mpesaPhone;
+  const fee = settings.data?.feeKes ?? 0;
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     try {
-      const result = await withdraw.mutateAsync({ amountKes: Number(amount) });
+      const result = await withdraw.mutateAsync({ amountKes: Number(amount), mpesaPhone: phone, password: phoneChanged ? password : undefined });
       toast.success(result.message);
       setAmount("");
+      setPassword("");
       setConfirmed(false);
-      await Promise.all([
-        utils.member.wallet.invalidate(),
-        utils.member.withdrawals.invalidate(),
-        utils.member.history.invalidate(),
-      ]);
+      await Promise.all([utils.member.wallet.invalidate(), utils.member.withdrawals.invalidate(), utils.member.history.invalidate(), utils.auth.me.invalidate()]);
     } catch (error) {
       toast.error(errorText(error));
     }
   };
   return (
     <>
-      <Intro
-        eyebrow="M-Pesa request"
-        title="Withdraw from your wallet."
-        description="Requests reserve available funds while they are reviewed. KaziFlow does not label a request Paid without an actual M-Pesa receipt recorded by an administrator."
-      />
-      <ActivationPrompt isActive={isActive} />
-      {!user.mpesaPhone && (
-        <div className="notice">
-          <UserRound size={17} />
-          <span>
-            <strong>Set your M-Pesa number first</strong>Save the correct payout
-            number in your profile before submitting a withdrawal.
-            <Link className="notice-link" href="/profile">
-              {" "}
-              Edit profile
-            </Link>
-          </span>
-        </div>
-      )}
+      <Intro eyebrow="M-Pesa withdrawal" title="Withdraw to M-Pesa." description="Your amount is reserved as soon as you submit. It is marked Paid only when Safaricom confirms the payout to your number." />
+      <VerifyPrompt isVerified={isVerified} />
+      {isVerified && <ActivationPrompt isActive={isActive} />}
       <div className="split-grid" style={{ marginTop: 14 }}>
         <form className="surface surface-pad form-stack" onSubmit={submit}>
           <h2 className="surface-title">Request a withdrawal</h2>
+          <div className="balance-callout">
+            <span>Available balance</span>
+            <strong>{formatKes(wallet?.availableMinor ?? 0)}</strong>
+          </div>
           <div className="field-grid">
             <label className="field">
               <span>Amount (KES)</span>
-              <input
-                className="input"
-                type="number"
-                min="1"
-                step="1"
-                required
-                value={amount}
-                onChange={e => setAmount(e.target.value)}
-                placeholder="Enter whole KES"
-              />
+              <input className="input" type="number" inputMode="numeric" min={settings.data?.minimumKes ?? 1} step="1" required value={amount} onChange={e => setAmount(e.target.value)} placeholder={`Minimum KES ${settings.data?.minimumKes ?? 100}`} />
             </label>
             <label className="field">
-              <span>Saved M-Pesa number</span>
-              <input
-                className="input"
-                readOnly
-                value={user.mpesaPhone ?? "Add number in profile"}
-              />
+              <span>M-Pesa number</span>
+              <input className="input" type="tel" inputMode="tel" required value={phone} onChange={e => setPhone(e.target.value)} placeholder="07XX XXX XXX" />
             </label>
+            {phoneChanged && (
+              <label className="field full">
+                <span>Account password (needed to use a new M-Pesa number)</span>
+                <input className="input" type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} />
+              </label>
+            )}
           </div>
           <p className="muted">
-            Available balance: <b>{formatKes(wallet?.availableMinor ?? 0)}</b>.
-            Minimum, fees, single-transaction and rolling 24-hour limits are set
-            by administrators.
+            Minimum KES {settings.data?.minimumKes ?? "—"} · Fee KES {fee} · You receive{" "}
+            <b>{amount && Number(amount) > fee ? `KES ${(Number(amount) - fee).toLocaleString()}` : "—"}</b>
           </p>
           <label className="checkbox-row">
-            <input
-              type="checkbox"
-              checked={confirmed}
-              onChange={e => setConfirmed(e.target.checked)}
-            />{" "}
-            I confirm this is my correct M-Pesa payout number, and I understand
-            this is a request—not an instant payment.
+            <input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} /> I confirm this M-Pesa number is mine and correct.
           </label>
-          <button
-            className="button-app"
-            disabled={
-              !isActive || !user.mpesaPhone || !confirmed || withdraw.isPending
-            }
-          >
-            {withdraw.isPending ? "Submitting…" : "Reserve funds & submit"}{" "}
-            <ArrowRight size={14} />
+          <button className="button-app" disabled={!isActive || !isVerified || !confirmed || withdraw.isPending}>
+            {withdraw.isPending ? "Submitting…" : "Request withdrawal"} <ArrowRight size={14} />
           </button>
         </form>
         <section className="surface surface-pad">
-          <h2 className="surface-title">Request states</h2>
+          <h2 className="surface-title">What each status means</h2>
           <div className="status-list">
             <div>
               <Badge value="pending" />
-              <p>Request received; amount reserved from available balance.</p>
+              <p>Received. The amount is reserved from your balance while our team reviews it.</p>
             </div>
             <div>
               <Badge value="processing" />
-              <p>Administrator is handling the M-Pesa payout.</p>
+              <p>Sent to M-Pesa. Waiting for Safaricom's confirmation.</p>
             </div>
             <div>
               <Badge value="paid" />
-              <p>Actual payout reference has been recorded.</p>
+              <p>Safaricom confirmed the payout. The M-Pesa receipt is shown below.</p>
+            </div>
+            <div>
+              <Badge value="payout_failed" />
+              <p>M-Pesa could not complete it. Your money is safe; we will retry or return it.</p>
             </div>
             <div>
               <Badge value="rejected" />
-              <p>
-                Request rejected; reserved amount returns to available balance.
-              </p>
+              <p>Not approved. The reserved amount is returned to your available balance.</p>
             </div>
           </div>
         </section>
       </div>
       <section className="surface surface-pad" style={{ marginTop: 14 }}>
-        <h2 className="surface-title">My withdrawal requests</h2>
+        <h2 className="surface-title">My withdrawals</h2>
         {!query.data?.length ? (
-          <Empty
-            title="No withdrawal requests"
-            text="Requests and their final references will appear here."
-          />
+          <Empty title="No withdrawal requests" text="Your requests and M-Pesa receipts will appear here." />
         ) : (
           <div className="table-wrap">
             <table className="data-table">
@@ -1473,10 +1570,10 @@ function WithdrawPage({
                   <th>Requested</th>
                   <th>Amount</th>
                   <th>Fee</th>
-                  <th>Receive</th>
+                  <th>You receive</th>
                   <th>Number</th>
                   <th>Status</th>
-                  <th>Receipt</th>
+                  <th>M-Pesa receipt / note</th>
                 </tr>
               </thead>
               <tbody>
@@ -1490,7 +1587,7 @@ function WithdrawPage({
                     <td>
                       <Badge value={row.status} />
                     </td>
-                    <td>{row.payoutReference ?? row.adminNote ?? "—"}</td>
+                    <td>{row.payoutReference ?? (row.status === "rejected" ? row.adminNote : null) ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1502,12 +1599,32 @@ function WithdrawPage({
   );
 }
 
-function ActivationPage({ isActive, user }: { isActive: boolean; user: User }) {
+function ActivationPage({ isActive, isVerified, user }: { isActive: boolean; isVerified: boolean; user: User }) {
   const status = trpc.member.activationStatus.useQuery();
-  const [phone, setPhone] = useState(user.mpesaPhone ?? user.phone ?? "");
-  const [accepted, setAccepted] = useState(false);
+  const [phone, setPhone] = useState(user.mpesaPhone ? `0${user.mpesaPhone.slice(3)}` : user.phone ? `0${user.phone.slice(3)}` : "");
+  const [paymentId, setPaymentId] = useState<number | null>(null);
   const start = trpc.member.startActivation.useMutation();
   const utils = trpc.useUtils();
+  const poll = trpc.member.paymentStatus.useQuery(
+    { paymentId: paymentId ?? 0 },
+    {
+      enabled: Boolean(paymentId),
+      refetchInterval: q => {
+        const s = q.state.data?.status;
+        return s === "succeeded" || s === "failed" || s === "verification_required" ? false : 4000;
+      },
+    }
+  );
+  const live = poll.data?.status;
+  useEffect(() => {
+    if (live === "succeeded") {
+      toast.success("Payment confirmed by Safaricom. Your account is active!");
+      void utils.auth.me.invalidate();
+      void utils.member.wallet.invalidate();
+      void utils.member.activationStatus.invalidate();
+    }
+    if (live === "failed" || live === "verification_required") void utils.member.activationStatus.invalidate();
+  }, [live, utils]);
   const begin = async (event: FormEvent) => {
     event.preventDefault();
     try {
@@ -1515,119 +1632,120 @@ function ActivationPage({ isActive, user }: { isActive: boolean; user: User }) {
       if (result.alreadyActivated) {
         toast.success("Your account is already activated.");
         await utils.auth.me.invalidate();
-      } else
-        toast.success(
-          "M-Pesa prompt requested. Activation remains pending until Daraja confirms payment."
-        );
+      } else {
+        setPaymentId(result.paymentId ?? null);
+        toast.success("Check your phone and enter your M-Pesa PIN to complete the payment.");
+      }
       await utils.member.activationStatus.invalidate();
     } catch (error) {
       toast.error(errorText(error));
     }
   };
+  const fee = status.data?.feeKes ?? 100;
   return (
     <>
       <Intro
         eyebrow="One-time member activation"
-        title={
-          isActive
-            ? "Your account is activated."
-            : "Activate before your first task."
-        }
+        title={isActive ? "Your account is active." : `Activate for KES ${fee}.`}
         description={
           isActive
-            ? "You can browse task listings, post eligible WhatsApp ads and request wallet withdrawals based on actual records."
-            : "The account fee is KES 100 once. Your account activates only after the server receives matching callback data and confirms the transaction with Safaricom Daraja."
+            ? "You can start tasks, join WhatsApp Status campaigns and request withdrawals."
+            : `Pay KES ${fee} once through an M-Pesa prompt. Your account activates only after Safaricom confirms the payment to our server.`
         }
       />
+      <VerifyPrompt isVerified={isVerified} />
       {isActive ? (
-        <div className="notice">
+        <div className="notice notice-success">
           <Check size={17} />
           <span>
-            <strong>Activation confirmed</strong>Your account status is recorded
-            in the member ledger.
+            <strong>Activation confirmed</strong>Your payment was confirmed by Safaricom.
+            <Link href="/tasks" className="notice-link">
+              {" "}
+              Browse tasks
+            </Link>
           </span>
         </div>
       ) : (
         <div className="activation-panel">
           <div className="activation-amount">
             <span>One-time account fee</span>
-            <strong>{formatKes((status.data?.feeKes ?? 100) * 100)}</strong>
-            <small>Pay through a Safaricom STK Push prompt.</small>
+            <strong>{formatKes(fee * 100)}</strong>
+            <small>Paid once. Never pay to a personal number.</small>
           </div>
-          {status.data?.darajaReady ? (
+          {paymentId && live && (
+            <div className={`payment-state payment-${live}`} role="status" aria-live="polite">
+              {live === "pending" || live === "callback_received" ? (
+                <>
+                  <Loader2 size={18} className="spin" />
+                  <span>
+                    <b>Waiting for M-Pesa…</b>Enter your PIN on your phone. This page updates automatically.
+                  </span>
+                </>
+              ) : live === "succeeded" ? (
+                <>
+                  <Check size={18} />
+                  <span>
+                    <b>Payment successful</b>M-Pesa receipt {poll.data?.receipt ?? "recorded"}.
+                  </span>
+                </>
+              ) : live === "failed" ? (
+                <>
+                  <X size={18} />
+                  <span>
+                    <b>Payment not completed</b>No money was taken, or the prompt was cancelled. You can try again.
+                  </span>
+                </>
+              ) : (
+                <>
+                  <ShieldCheck size={18} />
+                  <span>
+                    <b>Being checked</b>We are confirming this payment with Safaricom. Please do not pay again; contact support if it takes long.
+                  </span>
+                </>
+              )}
+            </div>
+          )}
+          {!isVerified ? null : status.data?.darajaReady ? (
             <form className="form-stack" onSubmit={begin}>
               <label className="field">
-                <span>M-Pesa number to receive the STK prompt</span>
-                <input
-                  className="input"
-                  required
-                  value={phone}
-                  onChange={e => setPhone(e.target.value)}
-                  placeholder="+254 7XX XXX XXX"
-                />
+                <span>M-Pesa number to receive the prompt</span>
+                <input className="input" type="tel" inputMode="tel" required value={phone} onChange={e => setPhone(e.target.value)} placeholder="07XX XXX XXX" />
               </label>
-              <label className="checkbox-row">
-                <input
-                  type="checkbox"
-                  required
-                  checked={accepted}
-                  onChange={e => setAccepted(e.target.checked)}
-                />{" "}
-                I understand my account is activated only after the provider
-                confirms the payment.
-              </label>
-              <button
-                className="button-app"
-                disabled={!accepted || start.isPending}
-              >
-                {start.isPending
-                  ? "Requesting prompt…"
-                  : "Request M-Pesa prompt"}{" "}
-                <ArrowRight size={15} />
+              <button className="button-app" disabled={start.isPending || live === "pending" || live === "callback_received"}>
+                {start.isPending ? "Sending prompt…" : `Pay KES ${fee} with M-Pesa`} <ArrowRight size={15} />
               </button>
             </form>
           ) : (
             <div className="notice">
               <ShieldCheck size={17} />
               <span>
-                <strong>
-                  Daraja setup is required before payments can be accepted
-                </strong>
-                Configure server-side Safaricom credentials and a public HTTPS
-                callback URL. No payment will be simulated and no account will
-                be activated without provider confirmation.
+                <strong>M-Pesa payments are not available yet</strong>Our payment connection is being set up. No payment will be requested until it is ready.
               </span>
             </div>
           )}
           <section className="activation-steps">
             <h2>What happens next</h2>
             <ol>
-              <li>Safaricom sends an STK Push to your number.</li>
-              <li>You approve or decline it on your phone.</li>
-              <li>
-                KaziFlow validates the callback amount and phone, then queries
-                the stored checkout with Daraja.
-              </li>
-              <li>
-                Your account activates only after verified success. A pending or
-                mismatched transaction goes to admin investigation.
-              </li>
+              <li>Safaricom sends an M-Pesa prompt to your phone.</li>
+              <li>Enter your M-Pesa PIN to approve KES {fee}.</li>
+              <li>Our server confirms the transaction directly with Safaricom.</li>
+              <li>Your account activates and you get a confirmation email.</li>
             </ol>
           </section>
         </div>
       )}
       <section className="surface surface-pad" style={{ marginTop: 15 }}>
-        <h2 className="surface-title">Activation payment history</h2>
+        <h2 className="surface-title">Activation payments</h2>
         {status.data?.payments?.length ? (
           <div className="table-wrap">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Initiated</th>
+                  <th>Date</th>
                   <th>Amount</th>
+                  <th>Phone</th>
                   <th>Status</th>
-                  <th>Receipt</th>
-                  <th>Provider status</th>
+                  <th>M-Pesa receipt</th>
                 </tr>
               </thead>
               <tbody>
@@ -1635,20 +1753,18 @@ function ActivationPage({ isActive, user }: { isActive: boolean; user: User }) {
                   <tr key={row.id}>
                     <td>{formatDate(row.createdAt)}</td>
                     <td>{formatKes(row.amountMinor)}</td>
+                    <td>{row.phone}</td>
                     <td>
-                      <Badge value={row.status} />
+                      <Badge value={row.status === "verification_required" ? "being_checked" : row.status === "callback_received" ? "pending" : row.status} />
                     </td>
                     <td>{row.receipt ?? "—"}</td>
-                    <td>
-                      {row.resultDescription ?? "Awaiting provider result"}
-                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         ) : (
-          <p className="muted">No activation attempts recorded.</p>
+          <p className="muted">No activation payments yet.</p>
         )}
       </section>
     </>
@@ -1675,7 +1791,7 @@ function Referrals() {
       <Intro
         eyebrow="Member referrals"
         title="Invite someone with a clear link."
-        description="Referral commissions are set by administrators and are recorded only when the configured eligibility rule is satisfied."
+        description={query.data?.commissionKes ? `Earn KES ${query.data.commissionKes} when someone you invite verifies their email and activates their account.` : "Referral commissions are set by the KaziFlow team and are credited when your referral activates."}
       />
       <div className="dashboard-grid">
         <Metric
@@ -1727,6 +1843,7 @@ function Referrals() {
                   <th>Member</th>
                   <th>Joined</th>
                   <th>Activation</th>
+                  <th>Commission</th>
                 </tr>
               </thead>
               <tbody>
@@ -1737,6 +1854,7 @@ function Referrals() {
                     <td>
                       <Badge value={r.activated ? "activated" : "pending"} />
                     </td>
+                    <td>{r.commissionMinor ? formatKes(r.commissionMinor) : "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1752,35 +1870,73 @@ function HistoryPage() {
   const query = trpc.member.history.useQuery();
   return (
     <>
-      <Intro
-        eyebrow="Wallet audit trail"
-        title="Transaction history."
-        description="Ledger entries are created for approved credits, holds, releases, confirmed payout settlements and configured fees."
-      />
+      <Intro eyebrow="Audit trail" title="Transaction history." description="Every credit, withdrawal hold, release and M-Pesa payment linked to your account." />
       <section className="surface surface-pad">
+        <h2 className="surface-title">Wallet transactions</h2>
         {query.isLoading ? (
           <p className="muted">Loading…</p>
-        ) : query.data?.length ? (
-          <LedgerTable rows={query.data} />
+        ) : query.data?.ledger.length ? (
+          <LedgerTable rows={query.data.ledger} />
         ) : (
-          <Empty
-            title="No transactions recorded"
-            text="Nothing has been seeded into your balance. Actual transaction records will appear here."
-          />
+          <Empty title="No transactions yet" text="Nothing is pre-loaded into your balance. Real transactions appear here as they happen." />
+        )}
+      </section>
+      <section className="surface surface-pad" style={{ marginTop: 14 }}>
+        <h2 className="surface-title">M-Pesa payments</h2>
+        {query.data?.payments.length ? (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Purpose</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Receipt</th>
+                </tr>
+              </thead>
+              <tbody>
+                {query.data.payments.map(p => (
+                  <tr key={p.id}>
+                    <td>{formatDate(p.createdAt)}</td>
+                    <td>{p.purpose === "activation" ? "Account activation" : "Campaign funding"}</td>
+                    <td>{formatKes(p.amountMinor)}</td>
+                    <td>
+                      <Badge value={p.status === "verification_required" ? "being_checked" : p.status} />
+                    </td>
+                    <td>{p.receipt ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="muted">No M-Pesa payments yet.</p>
         )}
       </section>
     </>
   );
 }
 
+const toIntl = (value: string) => {
+  const d = value.replace(/[\s()+-]/g, "");
+  if (/^0[17]\d{8}$/.test(d)) return `254${d.slice(1)}`;
+  if (/^[17]\d{8}$/.test(d)) return `254${d}`;
+  return d;
+};
+const toLocal = (value: string | null | undefined) => (value && value.startsWith("254") ? `0${value.slice(3)}` : (value ?? ""));
+
 function Profile({ user }: { user: User }) {
   const [form, setForm] = useState({
     name: user.name ?? "",
-    phone: user.phone ?? "",
+    phone: toLocal(user.phone),
     county: user.county ?? "Nairobi",
-    mpesaPhone: user.mpesaPhone ?? "",
+    mpesaPhone: toLocal(user.mpesaPhone),
+    marketingOptIn: user.marketingOptIn ?? true,
   });
+  const [pw, setPw] = useState({ currentPassword: "", newPassword: "", confirm: "" });
   const save = trpc.auth.updateProfile.useMutation();
+  const change = trpc.auth.changePassword.useMutation();
   const utils = trpc.useUtils();
   const update = async (event: FormEvent) => {
     event.preventDefault();
@@ -1792,55 +1948,76 @@ function Profile({ user }: { user: User }) {
       toast.error(errorText(error));
     }
   };
+  const changePassword = async (event: FormEvent) => {
+    event.preventDefault();
+    if (pw.newPassword !== pw.confirm) return toast.error("The new passwords do not match.");
+    try {
+      await change.mutateAsync({ currentPassword: pw.currentPassword, newPassword: pw.newPassword });
+      setPw({ currentPassword: "", newPassword: "", confirm: "" });
+      toast.success("Password changed. Other devices have been signed out.");
+    } catch (error) {
+      toast.error(errorText(error));
+    }
+  };
   return (
     <>
-      <Intro
-        eyebrow="Personal details"
-        title="Profile and payout number."
-        description="Keep your contact and county information accurate. M-Pesa withdrawals use the saved payout number."
-      />
+      <Intro eyebrow="Personal details" title="Profile." description="Keep your details accurate. Your email and phone number are private and never shown publicly." />
       <form className="surface surface-pad form-stack" onSubmit={update}>
         <div className="field-grid">
-          {(
-            [
-              ["name", "Full name"],
-              ["phone", "Phone number"],
-              ["county", "County"],
-              ["mpesaPhone", "M-Pesa payout number"],
-            ] as const
-          ).map(([key, label]) => (
-            <label className="field" key={key}>
-              <span>{label}</span>
-              <input
-                className="input"
-                required
-                value={form[key]}
-                onChange={e => setForm({ ...form, [key]: e.target.value })}
-              />
-            </label>
-          ))}
+          <label className="field">
+            <span>Full name</span>
+            <input className="input" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+          </label>
+          <label className="field">
+            <span>Phone number</span>
+            <input className="input" type="tel" required value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
+          </label>
+          <label className="field">
+            <span>County</span>
+            <select className="select" value={form.county} onChange={e => setForm({ ...form, county: e.target.value })}>
+              {KENYA_COUNTIES.map(c => (
+                <option key={c}>{c}</option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>M-Pesa payout number</span>
+            <input className="input" type="tel" required value={form.mpesaPhone} onChange={e => setForm({ ...form, mpesaPhone: e.target.value })} />
+          </label>
           <label className="field">
             <span>Email address</span>
             <input className="input" readOnly value={user.email ?? "—"} />
-            <small>
-              Ask support if you need help correcting an email address.
-            </small>
           </label>
           <label className="field">
-            <span>Email verification</span>
-            <input
-              className="input"
-              readOnly
-              value={
-                user.emailVerifiedAt
-                  ? "Verified"
-                  : "Not verified or mail delivery not configured"
-              }
-            />
+            <span>Email status</span>
+            <input className="input" readOnly value={user.emailVerifiedAt ? "Verified" : "Not verified"} />
           </label>
         </div>
+        <label className="checkbox-row">
+          <input type="checkbox" checked={form.marketingOptIn} onChange={e => setForm({ ...form, marketingOptIn: e.target.checked })} /> Send me important KaziFlow announcements by email.
+        </label>
         <button className="button-app" disabled={save.isPending}>
           {save.isPending ? "Saving…" : "Save profile"} <Check size={15} />
+        </button>
+      </form>
+      <form className="surface surface-pad form-stack" onSubmit={changePassword} style={{ marginTop: 14 }}>
+        <h2 className="surface-title">Change password</h2>
+        <div className="field-grid">
+          <label className="field">
+            <span>Current password</span>
+            <input className="input" type="password" autoComplete="current-password" required value={pw.currentPassword} onChange={e => setPw({ ...pw, currentPassword: e.target.value })} />
+          </label>
+          <label className="field">
+            <span>New password</span>
+            <input className="input" type="password" autoComplete="new-password" required minLength={8} value={pw.newPassword} onChange={e => setPw({ ...pw, newPassword: e.target.value })} />
+          </label>
+          <label className="field">
+            <span>Confirm new password</span>
+            <input className="input" type="password" autoComplete="new-password" required value={pw.confirm} onChange={e => setPw({ ...pw, confirm: e.target.value })} />
+          </label>
+        </div>
+        <button className="button-app secondary" disabled={change.isPending}>
+          {change.isPending ? "Saving…" : "Change password"}
         </button>
       </form>
     </>
@@ -1915,8 +2092,7 @@ function SupportPage() {
               transaction.
             </li>
             <li>
-              Withdrawal requests are manual; status changes do not represent an
-              unconfirmed payment.
+              Withdrawals are marked Paid only after Safaricom confirms the payout.
             </li>
             <li>
               WhatsApp screenshots are reviewed evidence, not an independent
@@ -1956,97 +2132,143 @@ function SupportPage() {
   );
 }
 
-function MemberReview() {
+const toneExamples = [
+  "Nimekuwa nikitumia KaziFlow and so far iko poa. Navigation ni simple na tasks zinaeleweka.",
+  "Website iko simple kutumia hata ukiwa kwa simu. So far experience yangu imekuwa smooth.",
+  "Si complicated kutumia. Unaingia unaona tasks available na reward yake.",
+];
+const suggestedDisplayName = (name: string | null | undefined) => {
+  const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "";
+  return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1]![0]!.toUpperCase()}.` : parts[0]!;
+};
+
+function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="star-picker" role="radiogroup" aria-label="Rating">
+      {[1, 2, 3, 4, 5].map(n => (
+        <button type="button" key={n} role="radio" aria-checked={value === n} aria-label={`${n} star${n > 1 ? "s" : ""}`} className={n <= value ? "on" : ""} onClick={() => onChange(n)}>
+          ★
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function MemberReview({ user }: { user: User }) {
   const mine = trpc.reviews.mine.useQuery();
   const [rating, setRating] = useState(5);
   const [content, setContent] = useState("");
+  const [displayName, setDisplayName] = useState(suggestedDisplayName(user.name));
+  const [showCounty, setShowCounty] = useState(false);
+  const [county, setCounty] = useState(user.county ?? "Nairobi");
+  const [loaded, setLoaded] = useState(false);
+  const data = mine.data;
   useEffect(() => {
-    if (mine.data && content === "") {
-      setRating(mine.data.rating);
-      setContent(mine.data.content);
+    if (!loaded && data && !data.removed) {
+      setRating(data.rating);
+      setContent(data.content);
+      setDisplayName(data.displayName);
+      setShowCounty(data.showCounty);
+      if (data.county) setCounty(data.county);
+      setLoaded(true);
     }
-  }, [mine.data]);
+  }, [data, loaded]);
   const save = trpc.reviews.submit.useMutation();
   const utils = trpc.useUtils();
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     try {
-      const result = await save.mutateAsync({ rating, content });
+      const result = await save.mutateAsync({ rating, content, displayName, showCounty, county: showCounty ? county : undefined });
       toast.success(result.message);
-      await Promise.all([
-        utils.reviews.mine.invalidate(),
-        utils.reviews.publicApproved.invalidate(),
-      ]);
+      await Promise.all([utils.reviews.mine.invalidate(), utils.reviews.publicApproved.invalidate()]);
     } catch (error) {
       toast.error(errorText(error));
     }
   };
-  return (
-    <>
-      <Intro
-        eyebrow="Member community"
-        title="Share a review."
-        description="One review per account; edits return to pending review. Only administrator-approved reviews appear publicly."
-      />
-      {mine.data?.status === "pending" && (
-        <div className="notice">
-          <Clock3 size={16} />
-          <span>
-            <strong>Your review is awaiting moderation</strong>Changes made
-            below will go back to the review queue.
-          </span>
-        </div>
-      )}
-      {mine.data?.status === "rejected" && (
+  if (data?.removed)
+    return (
+      <>
+        <Intro eyebrow="Community reviews" title="Your review." description="Reviews help other Kenyans understand KaziFlow." />
         <div className="notice">
           <X size={16} />
           <span>
-            <strong>Your review was not approved</strong>
-            {mine.data.reviewNote ||
-              "Edit your wording and resubmit for moderator review."}
+            <strong>Your review was removed by an administrator</strong>
+            {data.reviewNote ?? "Contact support if you think this was a mistake."}
+          </span>
+        </div>
+      </>
+    );
+  return (
+    <>
+      <Intro
+        eyebrow="Community reviews"
+        title={data ? "Edit your review." : "Share your KaziFlow experience."}
+        description="Write in English, Kiswahili or Sheng — whatever feels natural. One review per member; edits go back for approval."
+      />
+      <VerifyPrompt isVerified={Boolean(user.emailVerifiedAt)} />
+      {data && !data.removed && (
+        <div className={`notice ${data.status === "approved" ? "notice-success" : ""}`}>
+          {data.status === "approved" ? <Check size={16} /> : data.status === "pending" ? <Clock3 size={16} /> : <X size={16} />}
+          <span>
+            <strong>{data.status === "approved" ? "Your review is live on the homepage" : data.status === "pending" ? "Your review is waiting for approval" : "Your review was not approved"}</strong>
+            {data.status === "rejected" ? data.reviewNote || "Edit it and submit again." : data.status === "approved" ? "Editing it will send it back for approval." : "We usually review within a day."}
           </span>
         </div>
       )}
-      <form className="surface surface-pad form-stack" onSubmit={submit}>
-        <label className="field">
-          <span>Rating</span>
-          <select
-            className="select"
-            value={rating}
-            onChange={e => setRating(Number(e.target.value))}
-          >
-            {[5, 4, 3, 2, 1].map(value => (
-              <option key={value} value={value}>
-                {value} / 5
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>Your experience (20–1,000 characters)</span>
-          <textarea
-            className="textarea"
-            minLength={20}
-            maxLength={1000}
-            required
-            value={content}
-            onChange={e => setContent(e.target.value)}
-            placeholder="Describe your own experience accurately. Do not include private financial or personal information."
-          />
-        </label>
-        <button className="button-app" disabled={save.isPending}>
-          {save.isPending
-            ? "Submitting…"
-            : mine.data
-              ? "Save changes for review"
-              : "Submit review for moderation"}{" "}
-          <ArrowRight size={14} />
-        </button>
-        <p className="small-muted">
-          Your review is not public until an administrator approves it. The
-          platform never invents member quotes or ratings.
-        </p>
-      </form>
+      <div className="split-grid">
+        <form className="surface surface-pad form-stack" onSubmit={submit}>
+          <div className="field">
+            <span>Your rating</span>
+            <StarPicker value={rating} onChange={setRating} />
+          </div>
+          <label className="field">
+            <span>Your review (20–1,000 characters)</span>
+            <textarea className="textarea" minLength={20} maxLength={1000} required value={content} onChange={e => setContent(e.target.value)} placeholder={toneExamples[0]} rows={5} />
+            <small>{content.length}/1000 · No phone numbers, emails or links.</small>
+          </label>
+          <div className="field-grid">
+            <label className="field">
+              <span>Name to show publicly</span>
+              <input className="input" required maxLength={40} value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="e.g. Akinyi M." />
+              <small>First name and initial works best, like “Kevin O.”</small>
+            </label>
+            <label className="field">
+              <span>County (optional)</span>
+              <select className="select" value={county} disabled={!showCounty} onChange={e => setCounty(e.target.value)}>
+                {KENYA_COUNTIES.map(c => (
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <label className="checkbox-row">
+            <input type="checkbox" checked={showCounty} onChange={e => setShowCounty(e.target.checked)} /> Yes, show my county with my review.
+          </label>
+          <button className="button-app" disabled={save.isPending || !user.emailVerifiedAt}>
+            {save.isPending ? "Submitting…" : data ? "Save changes" : "Submit review"} <ArrowRight size={14} />
+          </button>
+          <p className="small-muted">Your email and phone number are never shown. Reviews appear only after approval.</p>
+        </form>
+        <aside className="surface surface-pad review-preview-wrap">
+          <h2 className="surface-title">Preview</h2>
+          <article className="review-card-public">
+            <span className="review-stars" aria-label={`${rating} out of 5 stars`}>
+              {"★".repeat(rating)}
+              <i>{"★".repeat(5 - rating)}</i>
+            </span>
+            <blockquote>“{content || toneExamples[1]}”</blockquote>
+            <div className="review-person">
+              <span className="review-avatar">{(displayName || "K").slice(0, 1).toUpperCase()}</span>
+              <span>
+                <b>{displayName || "Your name"}</b>
+                {showCounty && <small>{county} County</small>}
+              </span>
+            </div>
+          </article>
+          <p className="small-muted" style={{ marginTop: 12 }}>Need ideas? Talk about how easy it was to sign up, find tasks, track your earnings or use KaziFlow on your phone.</p>
+        </aside>
+      </div>
     </>
   );
 }

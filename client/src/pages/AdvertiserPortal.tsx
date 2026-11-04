@@ -22,6 +22,7 @@ type User = {
   id: number;
   name: string | null;
   email: string | null;
+  businessName?: string | null;
   accountType: string;
   role: string;
 };
@@ -62,7 +63,7 @@ export default function AdvertiserPortal({
   const [error, setError] = useState("");
   const [form, setForm] = useState({
     title: "",
-    advertiserName: user.name ?? "",
+    advertiserName: user.businessName ?? user.name ?? "",
     description: "",
     instructions: "",
     rateKes: "1",
@@ -168,6 +169,10 @@ export default function AdvertiserPortal({
             <ShieldCheck />
             <span>Support centre</span>
           </Link>
+          <button type="button" className="app-nav-logout" onClick={onLogout}>
+            <LogOut />
+            <span>Logout</span>
+          </button>
         </nav>
         <div className="sidebar-spacer" />
         <div className="sidebar-user">
@@ -241,6 +246,17 @@ export default function AdvertiserPortal({
               Create campaign <ArrowRight size={14} />
             </a>
           </div>
+          {!(user as any).emailVerifiedAt && (
+            <div className="notice notice-warn">
+              <ShieldCheck size={16} />
+              <span>
+                <strong>Verify your email to create and fund campaigns</strong>
+                <Link className="notice-link" href="/verify-email">
+                  Enter your six-digit code
+                </Link>
+              </span>
+            </div>
+          )}
           <div className="dashboard-grid">
             <div className="metric-card">
               <div className="metric-label">
@@ -262,11 +278,20 @@ export default function AdvertiserPortal({
             </div>
             <div className="metric-card">
               <div className="metric-label">
-                Administrator-approved views <Eye size={14} />
+                Reported views <Eye size={14} />
+              </div>
+              <strong className="metric-value">
+                {campaigns.reduce((s: number, c: any) => s + (c.reportedViews ?? 0), 0).toLocaleString()}
+              </strong>
+              <div className="metric-foot">What members claimed in screenshots — not paid until approved</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">
+                Approved views <Eye size={14} />
               </div>
               <strong className="metric-value">
                 {campaigns
-                  .reduce((s: number, c: any) => s + c.approvedReportedViews, 0)
+                  .reduce((s: number, c: any) => s + c.approvedViews, 0)
                   .toLocaleString()}
               </strong>
               <div className="metric-foot">
@@ -528,10 +553,12 @@ export default function AdvertiserPortal({
                         <span>Budget {formatKes(campaign.budgetMinor)}</span>
                         <span>Funded {formatKes(campaign.fundedMinor)}</span>
                         <span>Spent {formatKes(campaign.spentMinor)}</span>
+                        <span>{(campaign.reportedViews ?? 0).toLocaleString()} reported views</span>
                         <span>
-                          {campaign.approvedReportedViews.toLocaleString()}{" "}
-                          administrator-approved reported views
+                          <b>{campaign.approvedViews.toLocaleString()} approved views</b>
                         </span>
+                        {campaign.pendingReviews ? <span>{campaign.pendingReviews} awaiting review</span> : null}
+                        {campaign.endsAt && <span>Ends {new Date(campaign.endsAt).toLocaleDateString("en-KE")}</span>}
                         <span>
                           {campaign.participantCount} submitted participants
                         </span>
@@ -572,6 +599,7 @@ export default function AdvertiserPortal({
               </div>
             )}
           </section>
+          {location === "/advertiser/campaigns" && <CampaignTransactions />}
           <div className="notice" style={{ marginTop: 14 }}>
             <ShieldCheck size={16} />
             <span>
@@ -639,5 +667,47 @@ function CampaignParticipants({ campaignId }: { campaignId: number }) {
         </table>
       </div>
     </details>
+  );
+}
+
+function CampaignTransactions() {
+  const tx = trpc.advertiser.transactions.useQuery();
+  return (
+    <section className="surface surface-pad" style={{ marginTop: 14 }}>
+      <h2 className="surface-title">Campaign funding transactions</h2>
+      {!tx.data?.length ? (
+        <p className="muted">No funding payments yet.</p>
+      ) : (
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Campaign</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>M-Pesa receipt</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tx.data.map(t => (
+                <tr key={t.id}>
+                  <td>{new Date(t.createdAt).toLocaleString("en-KE")}</td>
+                  <td>
+                    {t.campaignTitle ?? `#${t.campaignId}`}
+                    <small className="table-subline">{t.reference}</small>
+                  </td>
+                  <td>{formatKes(t.amountMinor)}</td>
+                  <td>
+                    <span className={`badge ${t.status}`}>{t.status === "verification_required" ? "being checked" : t.status.replaceAll("_", " ")}</span>
+                  </td>
+                  <td>{t.receipt ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }

@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, count, desc, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -14,6 +14,7 @@ import { getDb } from "./db";
 import { uploadImage, uploadVideo } from "./uploads";
 import { darajaReady, initiateStkPush, normalizeKenyanPhone } from "./daraja";
 import { audit, settingValue } from "./security";
+import { publicMediaUrl } from "./storage";
 
 const dbRequired = async () => {
   const db = await getDb();
@@ -40,6 +41,10 @@ const requireAdvertiser = (user: typeof users.$inferSelect) => {
       message: "This account is suspended.",
     });
 };
+const requireVerified = (user: typeof users.$inferSelect) => {
+  if (!user.emailVerifiedAt)
+    throw new TRPCError({ code: "FORBIDDEN", message: "Verify your email address first." });
+};
 
 export const advertiserRouter = router({
   overview: advertiserProcedure.query(async ({ ctx }) => {
@@ -56,26 +61,25 @@ export const advertiserRouter = router({
         .select({ total: count() })
         .from(whatsappSubmissions)
         .where(eq(whatsappSubmissions.campaignId, campaign.id));
-      const approvedViews = await db
-        .select({ value: whatsappSubmissions.eligibleViews })
+      const subs = await db
+        .select({ status: whatsappSubmissions.status, reported: whatsappSubmissions.reportedViews, approved: whatsappSubmissions.eligibleViews })
         .from(whatsappSubmissions)
-        .where(
-          and(
-            eq(whatsappSubmissions.campaignId, campaign.id),
-            eq(whatsappSubmissions.status, "approved")
-          )
-        );
+        .where(eq(whatsappSubmissions.campaignId, campaign.id));
+      const approvedViews = subs.filter(s => s.status === "approved").map(s => ({ value: s.approved }));
+      const reportedViews = subs.reduce((sum, s) => sum + s.reported, 0);
+      const pendingReviews = subs.filter(s => s.status === "pending").length;
       output.push({
         ...campaign,
-        mediaUrl: campaign.mediaKey
-          ? `/manus-storage/${campaign.mediaKey}`
-          : null,
+        mediaUrl: publicMediaUrl(campaign.mediaKey),
         participantCount: Number(total[0]?.total ?? 0),
-        approvedReportedViews: approvedViews.reduce(
+        approvedViews: approvedViews.reduce(
           (sum, item) => sum + item.value,
           0
         ),
         amountSpentMinor: campaign.spentMinor,
+        reportedViews,
+        pendingReviews,
+        endsAt: campaign.activeAt ? new Date(campaign.activeAt.getTime() + campaign.durationDays * 86_400_000) : null,
       });
     }
     return { campaigns: output, darajaReady: darajaReady() };
@@ -159,6 +163,7 @@ export const advertiserRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       requireAdvertiser(ctx.user);
+      requireVerified(ctx.user);
       if (input.maximumPayableViews < input.minimumViews)
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -257,8 +262,8 @@ export const advertiserRouter = router({
         durationDays: input.durationDays,
         strictVerification: input.strictVerification,
         status: "pending_funding",
-      });
-      const id = Number((result as any)?.[0]?.insertId);
+      }).returning({ id: adCampaigns.id });
+      const id = result[0]!.id;
       await audit(ctx.user.id, "advertiser_campaign_created", "campaign", id, {
         reference,
         budgetMinor: input.budgetKes * 100,
@@ -281,6 +286,7 @@ export const advertiserRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       requireAdvertiser(ctx.user);
+      requireVerified(ctx.user);
       if (!darajaReady())
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
@@ -326,6 +332,16 @@ export const advertiserRouter = router({
             code: "PRECONDITION_FAILED",
             message: "Remaining campaign funding must be a whole KES amount.",
           });
+        await tx
+          .update(paymentAttempts)
+          .set({ status: "failed", resultDescription: "No M-Pesa confirmation received within 3 minutes." })
+          .where(
+            and(
+              eq(paymentAttempts.campaignId, campaign.id),
+              eq(paymentAttempts.status, "pending"),
+              sql`${paymentAttempts.createdAt} < now() - interval '3 minutes'`
+            )
+          );
         const pending = await tx
           .select({ id: paymentAttempts.id })
           .from(paymentAttempts)
@@ -356,9 +372,10 @@ export const advertiserRouter = router({
             amountMinor: remaining,
             phone,
             status: "pending",
-          });
+          })
+          .returning({ id: paymentAttempts.id });
         return {
-          paymentId: Number((inserted as any)?.[0]?.insertId),
+          paymentId: inserted[0]!.id,
           campaignId: campaign.id,
           amountMinor: remaining,
         };
@@ -394,15 +411,13 @@ export const advertiserRouter = router({
         await db
           .update(paymentAttempts)
           .set({
-            status: "verification_required",
-            resultDescription:
-              "The STK response could not be confirmed. No campaign funds were credited; administrator reconciliation is required before another prompt.",
+            status: "failed",
+            resultDescription: "Safaricom did not accept the STK request, so no prompt was sent.",
           })
           .where(eq(paymentAttempts.id, paymentId));
         throw new TRPCError({
           code: "BAD_GATEWAY",
-          message:
-            "The M-Pesa prompt could not be confirmed. No campaign funding was credited; contact support before retrying so a possible charge can be reconciled.",
+          message: "We could not send the M-Pesa prompt. No money was taken. Please try again.",
         });
       }
     }),
@@ -448,4 +463,25 @@ export const advertiserRouter = router({
         memberName: row.memberName?.split(" ")[0] ?? "Member",
       }));
     }),
+
+  transactions: advertiserProcedure.query(async ({ ctx }) => {
+    requireAdvertiser(ctx.user);
+    const db = await dbRequired();
+    return db
+      .select({
+        id: paymentAttempts.id,
+        campaignId: paymentAttempts.campaignId,
+        campaignTitle: adCampaigns.title,
+        reference: adCampaigns.reference,
+        amountMinor: paymentAttempts.amountMinor,
+        status: paymentAttempts.status,
+        receipt: paymentAttempts.receipt,
+        createdAt: paymentAttempts.createdAt,
+      })
+      .from(paymentAttempts)
+      .leftJoin(adCampaigns, eq(adCampaigns.id, paymentAttempts.campaignId))
+      .where(and(eq(paymentAttempts.userId, ctx.user.id), eq(paymentAttempts.purpose, "campaign_funding")))
+      .orderBy(desc(paymentAttempts.createdAt))
+      .limit(200);
+  }),
 });
