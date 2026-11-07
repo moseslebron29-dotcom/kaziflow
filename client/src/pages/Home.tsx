@@ -675,7 +675,7 @@ export default function Home() {
           <Wordmark inverse />
           <p>A clearer route from digital work to accountable records.</p>
           <span className="footer-locale">
-            Kenya · Built for practical digital work
+            Kenya · Lets chase poverty together
           </span>
         </div>
         <div className="footer-links">
@@ -701,7 +701,7 @@ export default function Home() {
         <div className="footer-bottom">
           <span>© {new Date().getFullYear()} KaziFlow</span>
           <span>
-            Rewards depend on eligibility, evidence and review. No
+            Rewards depend on eligibility, evidence and review. 
             guaranteed-income claims.
           </span>
         </div>
